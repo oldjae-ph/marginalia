@@ -12,7 +12,7 @@ if sys.version_info >= (3, 7):
     except Exception:
         pass
 
-PLUGIN_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'xray.koplugin'))
+PLUGIN_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'marginalia.koplugin'))
 LANGUAGES_DIR = os.path.join(PLUGIN_DIR, 'languages')
 SOURCE_DIR = PLUGIN_DIR
 

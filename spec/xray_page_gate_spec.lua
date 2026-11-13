@@ -3,7 +3,7 @@
 -- 2-Stage Entity States, LookupManager & Alias Gating, and Legacy Cache Self-Healing.
 
 require("spec/spec_helper")
-local main_plugin = dofile("xray.koplugin/main.lua")
+local main_plugin = dofile("marginalia.koplugin/main.lua")
 local xray_ui = require("xray_ui")
 local xray_fetch = require("xray_fetch")
 local xray_chapteranalyzer = require("xray_chapteranalyzer")

@@ -19,8 +19,8 @@ foreach ($item in $EnvList) {
     }
 }
 
-$PluginDir = "xray.koplugin"
-$WSLDest = "~/.config/koreader/plugins/xray.koplugin"
+$PluginDir = "marginalia.koplugin"
+$WSLDest = "~/.config/koreader/plugins/marginalia.koplugin"
 $SyntaxScript = "tools/check_syntax.py"
 
 # Probe for the squashfs-root location in WSL
@@ -50,7 +50,7 @@ function Run-Workflow {
     
     # 1. Syntax Check (Fast luac with Python fallback)
     Write-Host "Checking Lua syntax..." -NoNewline
-    $syntaxResult = wsl bash -c "if command -v luac >/dev/null 2>&1; then luac -p xray.koplugin/*.lua; else exit 99; fi"
+    $syntaxResult = wsl bash -c "if command -v luac >/dev/null 2>&1; then luac -p marginalia.koplugin/*.lua; else exit 99; fi"
     if ($LASTEXITCODE -eq 99) {
         $syntaxResult = python -X utf8 $SyntaxScript $PluginDir
     }
@@ -73,7 +73,7 @@ function Run-Workflow {
 
     # 1.7 Static Scope Analysis (Luacheck)
     Write-Host "Checking Lua variable scopes (Luacheck)..." -NoNewline
-    $luacheckResult = wsl bash -c "if [ -x /home/jimmy/.luarocks/bin/luacheck ]; then /home/jimmy/.luarocks/bin/luacheck xray.koplugin/*.lua --only 113; elif command -v luacheck >/dev/null 2>&1; then luacheck xray.koplugin/*.lua --only 113; else exit 0; fi"
+    $luacheckResult = wsl bash -c "if [ -x /home/jimmy/.luarocks/bin/luacheck ]; then /home/jimmy/.luarocks/bin/luacheck marginalia.koplugin/*.lua --only 113; elif command -v luacheck >/dev/null 2>&1; then luacheck marginalia.koplugin/*.lua --only 113; else exit 0; fi"
     if ($LASTEXITCODE -ne 0) {
         Write-Host " FAILED" -ForegroundColor Red
         Write-Host $luacheckResult

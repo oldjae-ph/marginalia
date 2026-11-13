@@ -26,7 +26,7 @@ describe("X-Ray Non-Touch & Keyboard Support", function()
                 updateConfigKey = function() end,
             },
             isRTL = function() return false end,
-            path = "xray.koplugin/",
+            path = "marginalia.koplugin/",
             _draw_underline = function() end,
             _PointerArrow = require("ui/widget/widget"):extend{},
             showImageActions = function() end,

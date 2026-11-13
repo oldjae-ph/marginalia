@@ -14,8 +14,8 @@ if sys.version_info >= (3, 7):
         pass
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LANGUAGES_DIR = os.path.join(BASE_DIR, 'xray.koplugin', 'languages')
-PROMPTS_DIR = os.path.join(BASE_DIR, 'xray.koplugin', 'prompts')
+LANGUAGES_DIR = os.path.join(BASE_DIR, 'marginalia.koplugin', 'languages')
+PROMPTS_DIR = os.path.join(BASE_DIR, 'marginalia.koplugin', 'prompts')
 
 def get_gemini_key():
     return os.environ.get("GEMINI_API_KEY")

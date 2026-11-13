@@ -72,8 +72,8 @@ local function getAssetPath(filename)
     local candidates = {
         file_dir .. "assets/" .. filename,
         file_dir .. "../assets/" .. filename,
-        "plugins/xray.koplugin/assets/" .. filename,
-        "./plugins/xray.koplugin/assets/" .. filename,
+        "plugins/marginalia.koplugin/assets/" .. filename,
+        "./plugins/marginalia.koplugin/assets/" .. filename,
     }
     for _, path in ipairs(candidates) do
         local f = io.open(path, "r")
@@ -83,7 +83,7 @@ local function getAssetPath(filename)
             return path
         end
     end
-    local fallback = "plugins/xray.koplugin/assets/" .. filename
+    local fallback = "plugins/marginalia.koplugin/assets/" .. filename
     _asset_path_cache[filename] = fallback
     return fallback
 end
@@ -5882,7 +5882,7 @@ function M:showConfigFileGuide()
             fgcolor = Blitbuffer.COLOR_BLACK,
         }
 
-        local instructions_text = self.loc:t("welcome_file_guide_desc") or "How to configure API keys via text file:\n\n1. Create a file named 'xray_key.txt' on your device or computer.\n2. Place it in your KOReader folder (e.g. koreader/ or koreader/settings/).\n3. Add your key inside on a single line:\n   • Gemini: gemini = YOUR_KEY (or simply paste raw key)\n   • OpenAI: openai = sk-...\n   • DeepSeek / Claude: deepseek = ..., claude = ...\n4. Tap 'Import Now' below to load your keys.\n\nManual Config: You can also edit koreader/plugins/xray.koplugin/xray_config.lua."
+        local instructions_text = self.loc:t("welcome_file_guide_desc") or "How to configure API keys via text file:\n\n1. Create a file named 'xray_key.txt' on your device or computer.\n2. Place it in your KOReader folder (e.g. koreader/ or koreader/settings/).\n3. Add your key inside on a single line:\n   • Gemini: gemini = YOUR_KEY (or simply paste raw key)\n   • OpenAI: openai = sk-...\n   • DeepSeek / Claude: deepseek = ..., claude = ...\n4. Tap 'Import Now' below to load your keys.\n\nManual Config: You can also edit koreader/plugins/marginalia.koplugin/xray_config.lua."
 
         local description_box = TextBoxWidget:new{
             text = instructions_text,

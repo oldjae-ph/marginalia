@@ -95,7 +95,7 @@ describe("xray_unitscanner async and background execution", function()
         for k, v in pairs(xray_unitscanner) do
             plugin[k] = v
         end
-        plugin.path = "xray.koplugin"
+        plugin.path = "marginalia.koplugin"
         plugin.ui.document.file = "/tmp/test_book.epub"
 
         plugin.ai_helper = {

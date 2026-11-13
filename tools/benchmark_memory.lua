@@ -1,7 +1,7 @@
 -- tools/benchmark_memory.lua
 -- Memory benchmark runner for KOReader X-Ray
 local squashfs_root = os.getenv("SQUASHFS_ROOT") or "/home/jimmy/squashfs-root"
-package.path = package.path .. ";" .. squashfs_root .. "/usr/lib/koreader/common/?.lua;" .. squashfs_root .. "/usr/lib/koreader/?.lua;xray.koplugin/?.lua;spec/?.lua;?.lua"
+package.path = package.path .. ";" .. squashfs_root .. "/usr/lib/koreader/common/?.lua;" .. squashfs_root .. "/usr/lib/koreader/?.lua;marginalia.koplugin/?.lua;spec/?.lua;?.lua"
 
 require("spec_helper")
 
@@ -187,7 +187,7 @@ f_tmp:close()
 print(string.format("  Generated payload size: %d bytes (%.1f KB)", #full_response_str, #full_response_str / 1024))
 
 local helper = AIHelper
-helper:init("xray.koplugin/")
+helper:init("marginalia.koplugin/")
 local parsed_result = helper:checkAsyncResult(tmp_result_file)
 
 local gc_peak2 = collectgarbage("count")

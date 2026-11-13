@@ -62,10 +62,10 @@ local function getAssetPath(filename)
     local candidates = {
         file_dir .. "assets/" .. filename,
         file_dir .. "../assets/" .. filename,
-        "plugins/xray.koplugin/assets/" .. filename,
-        "./plugins/xray.koplugin/assets/" .. filename,
-        data_dir .. "/plugins/xray.koplugin/assets/" .. filename,
-        settings_dir .. "/plugins/xray.koplugin/assets/" .. filename,
+        "plugins/marginalia.koplugin/assets/" .. filename,
+        "./plugins/marginalia.koplugin/assets/" .. filename,
+        data_dir .. "/plugins/marginalia.koplugin/assets/" .. filename,
+        settings_dir .. "/plugins/marginalia.koplugin/assets/" .. filename,
     }
     for _, path in ipairs(candidates) do
         local f = io.open(path, "r")
@@ -79,7 +79,7 @@ local function getAssetPath(filename)
             return path
         end
     end
-    return "plugins/xray.koplugin/assets/" .. filename
+    return "plugins/marginalia.koplugin/assets/" .. filename
 end
 
 local function makeTapItem(frame, callback)

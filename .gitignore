@@ -1,6 +1,7 @@
 similar/
-xray.koplugin.zip
+marginalia.koplugin.zip
 scratch/
 .wrangler/
 *.log
 *.log.old
+test-books/

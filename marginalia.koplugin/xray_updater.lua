@@ -12,7 +12,7 @@ local logger      = require("logger")
 -- ---------------------------------------------------------------------------
 local GITHUB_OWNER = "ultimatejimmy"
 local GITHUB_REPO  = "koreader-xray-plugin"
-local ASSET_NAME   = "xray.koplugin.zip"
+local ASSET_NAME   = "marginalia.koplugin.zip"
 
 -- Cache validity time in seconds. 0 = disable cache.
 local CACHE_TTL    = 3600  -- 1 hour
@@ -36,7 +36,7 @@ local function _runWithTrapper(Trapper, fn)
     end
 end
 local _plugin_dir = (debug.getinfo(1, "S").source or ""):match("^@(.+)/[^/]+$")
-    or "/mnt/us/extensions/xray.koplugin"
+    or "/mnt/us/extensions/marginalia.koplugin"
 
 local function _apiUrl(use_beta)
     if use_beta then

@@ -10,7 +10,7 @@ local Logger = {
 }
 
 function Logger:init(path)
-    self.path = path or "plugins/xray.koplugin"
+    self.path = path or "plugins/marginalia.koplugin"
     self:flush()
     
     -- Write a session start marker
@@ -33,7 +33,7 @@ function Logger:flush()
     end
 
     if not self.path then
-        self.path = "plugins/xray.koplugin"
+        self.path = "plugins/marginalia.koplugin"
     end
     local log_path = self.path .. "/xray.log"
 

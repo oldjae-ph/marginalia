@@ -1,6 +1,6 @@
 import os
 
-assets_dir = r"c:\Users\jpautz\Documents\ko\koreader-xray-plugin\xray.koplugin\assets"
+assets_dir = r"c:\Users\jpautz\Documents\ko\koreader-xray-plugin\marginalia.koplugin\assets"
 os.makedirs(assets_dir, exist_ok=True)
 
 svgs = {

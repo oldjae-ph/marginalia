@@ -1,7 +1,7 @@
 -- spec_helper.lua
 -- Unit scanner must not fork during tests
 _G.XRAY_DISABLE_UNIT_SUBPROCESS = true
-package.path = package.path .. ";xray.koplugin/?.lua"
+package.path = package.path .. ";marginalia.koplugin/?.lua"
 package.path = package.path .. ";/home/jpautz/.luarocks/share/lua/5.1/?.lua"
 package.path = package.path .. ";/home/jpautz/.luarocks/share/lua/5.1/?/init.lua"
 

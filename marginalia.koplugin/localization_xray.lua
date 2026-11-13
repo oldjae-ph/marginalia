@@ -97,7 +97,7 @@ function Localization:init(path)
     logger.info("Localization: Initializing...")
     
     -- Use provided path or hardcoded default
-    self.path = path or "plugins/xray.koplugin"
+    self.path = path or "plugins/marginalia.koplugin"
     
     -- Robust path handling for Windows/Unix
     self.path = self.path:gsub("\\", "/")
@@ -129,8 +129,8 @@ function Localization:discoverLanguages()
     if not attr or attr.mode ~= "directory" then
         logger.warn("Localization: Languages directory not found:", lang_dir)
         -- Try fallback to hardcoded path if current path failed
-        if self.path ~= "plugins/xray.koplugin" then
-            self.path = "plugins/xray.koplugin"
+        if self.path ~= "plugins/marginalia.koplugin" then
+            self.path = "plugins/marginalia.koplugin"
             lang_dir = self.path .. "/languages"
             attr = lfs.attributes(lang_dir)
             if not attr or attr.mode ~= "directory" then
@@ -524,7 +524,7 @@ function Localization:t(key, ...)
             welcome_action_ask_later = "Ask Later",
             welcome_action_dont_ask = "Don't Ask Again",
             welcome_file_guide_title = "Config & Text File Setup",
-            welcome_file_guide_desc = "How to configure API keys via text file:\n\n1. Create a file named 'xray_key.txt' on your device or computer.\n2. Place it in your KOReader folder (e.g. koreader/ or koreader/settings/).\n3. Add your key inside on a single line:\n   • Gemini: gemini = YOUR_KEY (or simply paste raw key)\n   • OpenAI: openai = sk-...\n   • DeepSeek/Claude: deepseek = ..., claude = ...\n4. Tap 'Import Now' below to load your keys.\n\nManual Config: You can also edit koreader/plugins/xray.koplugin/xray_config.lua.",
+            welcome_file_guide_desc = "How to configure API keys via text file:\n\n1. Create a file named 'xray_key.txt' on your device or computer.\n2. Place it in your KOReader folder (e.g. koreader/ or koreader/settings/).\n3. Add your key inside on a single line:\n   • Gemini: gemini = YOUR_KEY (or simply paste raw key)\n   • OpenAI: openai = sk-...\n   • DeepSeek/Claude: deepseek = ..., claude = ...\n4. Tap 'Import Now' below to load your keys.\n\nManual Config: You can also edit koreader/plugins/marginalia.koplugin/xray_config.lua.",
             welcome_file_guide_scan = "Scan QR to view API Key Setup wiki guide",
             welcome_btn_import_now = "Import Now",
             welcome_no_file_found = "No xray_key.txt found in KOReader directory.",

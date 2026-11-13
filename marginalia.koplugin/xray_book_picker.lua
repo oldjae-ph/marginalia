@@ -54,8 +54,8 @@ local function getAssetPath(filename)
     local candidates = {
         file_dir .. "assets/" .. filename,
         file_dir .. "../assets/" .. filename,
-        "plugins/xray.koplugin/assets/" .. filename,
-        "./plugins/xray.koplugin/assets/" .. filename,
+        "plugins/marginalia.koplugin/assets/" .. filename,
+        "./plugins/marginalia.koplugin/assets/" .. filename,
     }
     for _, path in ipairs(candidates) do
         local f = io.open(path, "r")

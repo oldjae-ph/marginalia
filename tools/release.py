@@ -15,7 +15,7 @@ def main():
     new_version = sys.argv[1]
     
     # Path to _meta.lua relative to this script's location
-    meta_path = Path(__file__).parent.parent / "xray.koplugin" / "_meta.lua"
+    meta_path = Path(__file__).parent.parent / "marginalia.koplugin" / "_meta.lua"
     
     if not meta_path.exists():
         print(f"Error: Could not find {meta_path}")

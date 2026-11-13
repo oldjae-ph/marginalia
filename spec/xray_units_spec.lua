@@ -1064,7 +1064,7 @@ describe("xray_units", function()
     end)
 
     describe("Unit Converter Prompt & Gating (Issue #159)", function()
-        local XRayPlugin = dofile("xray.koplugin/main.lua")
+        local XRayPlugin = dofile("marginalia.koplugin/main.lua")
         local UIManager = require("ui/uimanager")
 
         it("does not prompt with new feature card when unit converter is disabled", function()

@@ -1,7 +1,7 @@
 require("spec.spec_helper")
 
 local UIManager = require("ui/uimanager")
-local XRayPlugin = dofile("xray.koplugin/main.lua")
+local XRayPlugin = dofile("marginalia.koplugin/main.lua")
 
 describe("X-Ray Book Type Detection and Archive Format Protection", function()
     local plugin

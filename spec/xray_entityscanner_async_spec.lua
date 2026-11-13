@@ -92,7 +92,7 @@ describe("xray_entityscanner async background scanning & overlay", function()
         for k, v in pairs(xray_entityscanner) do
             plugin[k] = v
         end
-        plugin.path = "xray.koplugin"
+        plugin.path = "marginalia.koplugin"
         plugin.ui.document.file = "/tmp/test_entity_book.epub"
 
         plugin.ai_helper = {

@@ -178,7 +178,7 @@ describe("Localization and Atomic File Operations (Issue #164)", function()
 
             package.loaded["xray_aihelper"] = nil
             local AIHelper = require("xray_aihelper")
-            AIHelper.path = "xray.koplugin"
+            AIHelper.path = "marginalia.koplugin"
             AIHelper:loadSettings()
 
             local bak_file = settings_file .. ".corrupted"

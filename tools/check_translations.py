@@ -5,8 +5,8 @@ import sys
 import hashlib
 
 # Configuration
-LANGUAGES_DIR = os.path.join(os.path.dirname(__file__), '..', 'xray.koplugin', 'languages')
-SOURCE_DIR = os.path.join(os.path.dirname(__file__), '..', 'xray.koplugin')
+LANGUAGES_DIR = os.path.join(os.path.dirname(__file__), '..', 'marginalia.koplugin', 'languages')
+SOURCE_DIR = os.path.join(os.path.dirname(__file__), '..', 'marginalia.koplugin')
 MASTER_LANG = 'en'
 
 # Narrow allowlist of keys that legitimately don't need translations (symbols, paths, brand names, etc.)
@@ -15,7 +15,7 @@ ALLOWLIST = {
     'mention_return_btn',      # "← Back"
     'mention_return_label',    # "← Back to p.%d"
     'merge_back',              # "← Back"
-    'path',                    # "plugins/xray.koplugin"
+    'path',                    # "plugins/marginalia.koplugin"
     'current_language',        # "en" (or specific code)
     'menu_xray',               # "X-Ray" (brand name)
 }

@@ -1281,7 +1281,7 @@ function AIHelper:cancelAsyncChild(expected_pid)
 end
 
 function AIHelper:init(path)
-    self.path = path or "plugins/xray.koplugin"
+    self.path = path or "plugins/marginalia.koplugin"
     
     -- Cleanup orphaned temporary files from previous sessions
     pcall(function()

@@ -1,4 +1,4 @@
-package.path = "xray.koplugin/?.lua;spec/?.lua;" .. package.path
+package.path = "marginalia.koplugin/?.lua;spec/?.lua;" .. package.path
 require("spec.spec_helper")
 
 local Crypto = require("xray_crypto")

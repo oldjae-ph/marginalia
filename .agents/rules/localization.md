@@ -33,7 +33,7 @@ python tools/translate_all.py --translate <lang_code> "<Language_Name>"
 *Example:* `python tools/translate_all.py --translate id "Bahasa Indonesia"`
 
 ## AI Prompts Workflow
-The AI prompts are stored in `xray.koplugin/prompts/*.lua`. 
+The AI prompts are stored in `marginalia.koplugin/prompts/*.lua`. 
 
 Whenever you modify the logic or structure of an AI prompt (e.g., `comprehensive_xray` in `en.lua`):
 1.  Apply the changes to the English version first.
@@ -44,10 +44,10 @@ Whenever you modify the logic or structure of an AI prompt (e.g., `comprehensive
 ## Registering the Localized Language in the UI Selection List
 When adding support for a new language, you must register it in the codebase so that it displays with its localized name in the UI and is correctly auto-detected:
 
-1. **`xray.koplugin/xray_ui.lua`**:
+1. **`marginalia.koplugin/xray_ui.lua`**:
    - Add the language code and its localized display name (e.g., `it = "Italiano"`) to the `LANGUAGE_NAMES` table defined in `showLanguageSelection()`.
    - Add the language code and its localized display name to the `LANGUAGE_NAMES` table defined in `suggestBookLanguage()`.
-2. **`xray.koplugin/xray_aihelper.lua`**:
+2. **`marginalia.koplugin/xray_aihelper.lua`**:
    - Add the language code to the `supported` lookup table (e.g., `local supported = { ..., <lang_code>=1 }`) inside the helper settings initialization to enable correct auto-detection based on KOReader's system language.
 
 

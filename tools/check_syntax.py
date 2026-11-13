@@ -23,7 +23,7 @@ def check_syntax(directory):
     return not failed
 
 if __name__ == "__main__":
-    target_dir = sys.argv[1] if len(sys.argv) > 1 else "xray.koplugin"
+    target_dir = sys.argv[1] if len(sys.argv) > 1 else "marginalia.koplugin"
     if check_syntax(target_dir):
         print(f"ALL FILES IN {target_dir} PASS SYNTAX CHECK")
         sys.exit(0)

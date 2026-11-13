@@ -25,13 +25,13 @@ jobs:
         run: |
           # Package the plugin directory into a zip file
           # Excluding hidden files and git metadata
-          zip -r xray.koplugin.zip xray.koplugin -x "*.git*" "*/.*"
+          zip -r marginalia.koplugin.zip marginalia.koplugin -x "*.git*" "*/.*"
 
       - name: Create Draft Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: xray.koplugin.zip
+          files: marginalia.koplugin.zip
           draft: true
           prerelease: ${{ contains(github.ref_name, '-beta') }}
           generate_release_notes: true
