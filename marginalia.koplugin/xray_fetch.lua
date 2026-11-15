@@ -39,6 +39,12 @@ local function _getCurrentPage(plugin)
     return 1
 end
 
+-- Marginalia: the reader's page, held back to the confirmed spoiler boundary.
+local function _boundedPage(plugin, page)
+    if plugin and plugin.marginaliaClampPage then return plugin:marginaliaClampPage(page) end
+    return page
+end
+
 local M = {}
 
 function M:isRequestTimedOut(started_at, timeout_seconds)
@@ -77,7 +83,7 @@ end
 function M:fetchFromAI()
     require("ui/network/manager"):runWhenOnline(function() 
         if self.destroyed or not self.ui or not self.ui.document then return end
-        local current_page = self.ui:getCurrentPage()
+        local current_page = _boundedPage(self, self.ui:getCurrentPage())
         local total_pages = (type(self.ui.document.getPageCount) == "function" and self.ui.document:getPageCount()) or 1
         local reading_percent = math.floor((current_page / total_pages) * 100)
         local spoiler_setting = self.ai_helper.settings and self.ai_helper.settings.spoiler_setting or "spoiler_free"
@@ -93,7 +99,7 @@ end
 function M:updateFromAI()
     require("ui/network/manager"):runWhenOnline(function() 
         if self.destroyed or not self.ui or not self.ui.document then return end
-        local current_page = self.ui:getCurrentPage()
+        local current_page = _boundedPage(self, self.ui:getCurrentPage())
         local total_pages = (type(self.ui.document.getPageCount) == "function" and self.ui.document:getPageCount()) or 1
         local reading_percent = math.floor((current_page / total_pages) * 100)
         local spoiler_setting = self.ai_helper.settings and self.ai_helper.settings.spoiler_setting or "spoiler_free"
@@ -125,7 +131,7 @@ function M:fetchSingleWord(text, pos0, pos1)
             self:cancelActiveAIRequest("Previous AI request replaced by single word lookup")
         end
         
-        local current_page = _getCurrentPage(self)
+        local current_page = _boundedPage(self, _getCurrentPage(self))
         local total_pages = (type(self.ui.document.getPageCount) == "function" and self.ui.document:getPageCount()) or 1
         local reading_percent = math.floor((current_page / math.max(1, total_pages)) * 100)
         local spoiler_setting = self.ai_helper and self.ai_helper.settings and self.ai_helper.settings.spoiler_setting or "spoiler_free"
@@ -729,7 +735,7 @@ function M:continueWithFetch(reading_percent, is_update, last_fetch_page, is_sil
         end
         if not self.chapter_analyzer then self.chapter_analyzer = require(plugin_path .. "xray_chapteranalyzer"):new() end
 
-        local current_page = batch_end_page or self.ui:getCurrentPage()
+        local current_page = _boundedPage(self, batch_end_page or self.ui:getCurrentPage())
         if is_anthology == nil then
             is_anthology = self.isAnthologyMode and self:isAnthologyMode()
         end
@@ -1911,7 +1917,7 @@ function M:fetchMoreEntities(entity_type)
         local props = self.ui.document:getProps() or {}
         local title = sanitizeMetadata(props.title)
         local author = sanitizeMetadata(props.authors)
-        local current_page = self.ui:getCurrentPage()
+        local current_page = _boundedPage(self, self.ui:getCurrentPage())
         local reading_percent = math.floor((current_page / self.ui.document:getPageCount()) * 100)
         local spoiler_setting = self.ai_helper.settings and self.ai_helper.settings.spoiler_setting or "spoiler_free"
         
@@ -1979,7 +1985,7 @@ function M:fetchMoreEntities(entity_type)
             if not self.chapter_analyzer then self.chapter_analyzer = require(plugin_path .. "xray_chapteranalyzer"):new() end
             
             -- EVEN SAMPLING: Divide the readable range into equal segments
-            local current_page = self.ui:getCurrentPage()
+            local current_page = _boundedPage(self, self.ui:getCurrentPage())
             local is_anthology = self.isAnthologyMode and self:isAnthologyMode()
             local current_story = is_anthology and self:getCurrentStory(current_page) or nil
 

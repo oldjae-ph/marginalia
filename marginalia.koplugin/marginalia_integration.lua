@@ -59,6 +59,17 @@ function M:marginaliaLimitPage()
     return self._marginalia_gate and self._marginalia_gate() or nil
 end
 
+-- A page, held back to the boundary: where upstream code says "the reader is on
+-- page N" it must not mean a page past what has been confirmed. Never below 1, so
+-- upstream arithmetic stays safe even when the limit is 0 (the gate then yields
+-- no text anyway). Without a gate (nothing installed) the page is unchanged.
+function M:marginaliaClampPage(page)
+    page = tonumber(page)
+    local limit = self:marginaliaLimitPage()
+    if not page or not limit then return page end
+    return math.max(1, math.min(page, limit))
+end
+
 function M:marginaliaOnReaderReady()
     if self.marginalia then return end
     self:marginaliaInstallGate()
