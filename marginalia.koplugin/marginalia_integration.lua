@@ -221,8 +221,37 @@ function M:marginaliaOnPageUpdate(pageno)
     if not ok then self:log("Marginalia: page update failed: " .. tostring(err)) end
 end
 
+-- Remove every entry with one of these titles, at any depth of static submenus.
+local function removeEntries(items, titles)
+    for i = #items, 1, -1 do
+        local item = items[i]
+        if type(item) == "table" then
+            if item.text and titles[item.text] then
+                table.remove(items, i)
+            elseif type(item.sub_item_table) == "table" then
+                removeEntries(item.sub_item_table, titles)
+            end
+        end
+    end
+end
+
+-- Upstream's "Spoiler Settings" only chooses between spoiler-free and "Full Book
+-- Mode". Marginalia has no full-book mode (it is locked off), so the entry would
+-- only mislead. Removed here, after upstream builds the menu, so upstream's own
+-- code stays untouched. Matched by title, in English and in the plugin's language.
+function M:marginaliaHideFullBookSetting(items)
+    local ok, err = pcall(function()
+        local titles = { ["Spoiler Settings"] = true }
+        local localized = self.loc and self.loc.t and self.loc:t("spoiler_preference_title")
+        if type(localized) == "string" and localized ~= "" then titles[localized] = true end
+        removeEntries(items, titles)
+    end)
+    if not ok then self:log("Marginalia: could not hide the full-book setting: " .. tostring(err)) end
+end
+
 -- Add "Spoiler boundary" to the top of the X-Ray menu. Called from getSubMenuItems().
 function M:marginaliaAddMenuItems(items)
+    self:marginaliaHideFullBookSetting(items)
     local ok, err = pcall(function()
         local MenuBuilder = require(plugin_path .. "marginalia_menu")
         local Prompt = require(plugin_path .. "marginalia_prompt")

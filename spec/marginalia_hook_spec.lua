@@ -302,6 +302,52 @@ describe("Marginalia menu hook in main.lua", function()
         assert.are.equal("Spoiler boundary: not set yet", items[1].text_func())
     end)
 
+    -- every entry text anywhere in the (static) menu tree
+    local function allTexts(items, out)
+        out = out or {}
+        for _, item in ipairs(items) do
+            if type(item) == "table" then
+                if item.text then out[#out + 1] = item.text end
+                if type(item.sub_item_table) == "table" then allTexts(item.sub_item_table, out) end
+            end
+        end
+        return out
+    end
+    local function has(list, text)
+        for _, t in ipairs(list) do if t == text then return true end end
+        return false
+    end
+
+    it("upstream does offer the full-book picker (control: without our hook it is there)", function()
+        local plugin = menuPlugin(true)
+        plugin.marginaliaAddMenuItems = false -- hook disabled
+        assert.is_true(has(allTexts(plugin:getSubMenuItems()), "Spoiler Settings"))
+    end)
+
+    it("hides the full-book 'Spoiler Settings' entry", function()
+        local texts = allTexts(menuPlugin(true):getSubMenuItems())
+        assert.is_false(has(texts, "Spoiler Settings"))
+    end)
+
+    it("hides it in the plugin's own language too", function()
+        local plugin = menuPlugin(true)
+        plugin.loc = { t = function(_, key) if key == "spoiler_preference_title" then return "Spoiler-Einstellungen" end end }
+        plugin.marginaliaAddMenuItems = false
+        local before = allTexts(plugin:getSubMenuItems())
+        assert.is_true(has(before, "Spoiler-Einstellungen")) -- control
+        plugin.marginaliaAddMenuItems = XRayPlugin.marginaliaAddMenuItems
+        local after = allTexts(plugin:getSubMenuItems())
+        assert.is_false(has(after, "Spoiler-Einstellungen"))
+    end)
+
+    it("leaves its neighbours alone", function()
+        local texts = allTexts(menuPlugin(true):getSubMenuItems())
+        assert.is_true(has(texts, "Prefetch Horizon (Offline Readers)"))
+        assert.is_true(has(texts, "Series Context"))
+        assert.is_true(has(texts, "Content & Fetch Settings"))
+        assert.is_true(has(texts, "Settings"))
+    end)
+
     it("never breaks upstream's menu if building the entry fails", function()
         local plugin = menuPlugin(true)
         local saved = package.loaded["marginalia_menu"]
