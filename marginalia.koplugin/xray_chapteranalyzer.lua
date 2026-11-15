@@ -83,6 +83,37 @@ function ChapterAnalyzer:getEndPageForCurrentPage(ui, current_page)
     return current_page
 end
 
+-- Marginalia spoiler gate. When ChapterAnalyzer.limit_provider is set it returns the
+-- last page the reader may see or send (0 = nothing). Every function below that
+-- extracts book text or annotations clamps itself to it, so no request can carry
+-- text past the confirmed boundary. Unset = no limit (upstream behaviour). A
+-- provider that errors or returns a non-number fails CLOSED (0).
+function ChapterAnalyzer:getLimitPage()
+    local provider = ChapterAnalyzer.limit_provider
+    if type(provider) ~= "function" then return nil end
+    local ok, value = pcall(provider)
+    value = ok and tonumber(value) or nil
+    if not value or value ~= value then return 0 end
+    return math.max(0, math.floor(value))
+end
+
+-- The reader's real page (used when a caller means "where the reader is now").
+local function liveCurrentPage(ui)
+    local page
+    if ui and type(ui.getCurrentPage) == "function" then
+        local ok, p = pcall(function() return ui:getCurrentPage() end)
+        if ok then page = tonumber(p) end
+    end
+    return page
+end
+
+-- Page of an XPointer, or nil when it cannot be resolved.
+local function pageOfXPointer(ui, xp)
+    if not (ui and ui.document and type(ui.document.getPageFromXPointer) == "function") then return nil end
+    local ok, p = pcall(ui.document.getPageFromXPointer, ui.document, xp)
+    return ok and tonumber(p) or nil
+end
+
 -- Get current chapter/section text
 function ChapterAnalyzer:getCurrentChapterText(ui)
     if not ui or not ui.document then
@@ -441,7 +472,12 @@ end
 function ChapterAnalyzer:getTextFromPageRange(ui, start_page, end_page, max_len)
     if not ui or not ui.document then return nil end
     max_len = max_len or 15000
-    
+    local limit = self:getLimitPage()
+    if limit then
+        if not tonumber(start_page) or start_page > limit then return nil end
+        end_page = math.min(tonumber(end_page) or math.huge, self:getEndPageForCurrentPage(ui, limit))
+    end
+
     local is_reflowable = ui.rolling ~= nil
     
     if is_reflowable then
@@ -541,12 +577,27 @@ function ChapterAnalyzer:getTextForAnalysis(ui, max_len, progress_callback, curr
         end
     end
     
+    -- Marginalia gate: never read past the confirmed boundary.
+    local limit = self:getLimitPage()
+    if limit then
+        local max_end = self:getEndPageForCurrentPage(ui, limit)
+        if target_xp then
+            -- an exact XPointer is only trusted when it sits on an allowed page
+            local tp = pageOfXPointer(ui, target_xp)
+            if not tp or tp > limit then target_xp = nil; current_page = max_end end
+        end
+        if not target_xp then
+            -- nil meant "wherever the reader is now": make that explicit, then clamp
+            current_page = math.min(current_page or liveCurrentPage(ui) or max_end, max_end)
+        end
+    end
+
     -- Check if it's a reflowable document (EPUB, etc.)
     local is_reflowable = ui.rolling ~= nil
-    
+
     if is_reflowable then
         local current_xp = nil
-        
+
         -- Priority 1: Exact target XPointer (e.g., from a highlighted word)
         if target_xp then
             current_xp = target_xp
@@ -745,7 +796,11 @@ function ChapterAnalyzer:getAnnotationsForAnalysis(ui, max_page)
         end
     end
     max_page = tonumber(max_page)
-    
+    -- Marginalia gate: nothing past the boundary, and an annotation whose page
+    -- cannot be worked out is left out rather than assumed safe.
+    local limit = self:getLimitPage()
+    if limit then max_page = math.min(max_page or limit, limit) end
+
     -- Try to get annotations from the document/UI
     -- In KOReader, annotations are typically in ui.annotation.annotations
     if ui and ui.annotation and ui.annotation.annotations then
@@ -767,7 +822,7 @@ function ChapterAnalyzer:getAnnotationsForAnalysis(ui, max_page)
                     annot_page = tonumber(resolved)
                 end
             end
-            if not max_page or not annot_page or annot_page <= max_page then
+            if (not limit or annot_page) and (not max_page or not annot_page or annot_page <= max_page) then
                 if annot.text and #annot.text > 0 then
                     annotations_text = annotations_text .. "Highlight: " .. annot.text .. "\n"
                 end
@@ -1121,6 +1176,21 @@ function ChapterAnalyzer:getSingleChapterText(ui, chapter, next_chapter, current
     if not ui or not ui.document or not chapter then return "" end
     max_len = max_len or 40000
 
+    -- Marginalia gate: a chapter we cannot place, or that starts past the boundary,
+    -- yields nothing; a chapter that straddles it is cut at the boundary by the
+    -- existing "reader is inside this chapter" branch below.
+    local limit = self:getLimitPage()
+    if limit then
+        local ch_page = tonumber(chapter.page)
+        if not ch_page or ch_page > limit then return "" end
+        -- a chapter that starts after the page the caller says the reader is on is
+        -- ahead of the reader (upstream would return all of it)
+        if current_page and current_page < ch_page then return "" end
+        -- the existing "reader is inside this chapter" branch below then cuts a
+        -- chapter that straddles the boundary at the boundary
+        current_page = math.min(current_page or limit, limit)
+    end
+
     -- If reader is inside this chapter and spoiler protection is needed, strictly truncate to current page
     if current_page and chapter.page and chapter.page <= current_page then
         local next_page = chapter.end_page or (next_chapter and next_chapter.page)
@@ -1283,6 +1353,13 @@ function ChapterAnalyzer:getDetailedChapterSamples(ui, max_chapters, total_limit
         return nil, nil 
     end
     
+    -- Marginalia gate: never sample the whole book, never past the boundary.
+    local limit = self:getLimitPage()
+    if limit then
+        is_full_book = false
+        resolved_current_page = math.min(resolved_current_page or liveCurrentPage(ui) or limit, limit)
+    end
+
     local current_page = resolved_current_page
     if not is_full_book then
         if current_page then
@@ -1348,6 +1425,8 @@ function ChapterAnalyzer:getDetailedChapterSamples(ui, max_chapters, total_limit
             end
             if skip_by_story then
                 -- Skip chapters outside the story bounds
+            elseif limit and not ch_page then
+                -- Marginalia gate: a chapter we cannot place may lie past the boundary
             elseif not is_full_book and current_page and ch_page and ch_page > current_page then
                 -- Skip chapters past current_page without breaking (since TOC items may not be strictly page-ordered)
             else
@@ -1436,6 +1515,10 @@ function ChapterAnalyzer:getDetailedChapterSamples(ui, max_chapters, total_limit
             if not is_full_book and current_page and chapter.page and chapter.page <= current_page then
                 local next_chapter = toc[chapter.toc_index + 1]
                 if not next_chapter or (next_chapter.page and next_chapter.page > current_page) then
+                    is_current_chapter = true
+                elseif limit and not next_chapter.page then
+                    -- Marginalia gate: the next chapter's position is unknown, so this one
+                    -- may run past the boundary; cut it at the boundary
                     is_current_chapter = true
                 end
             end

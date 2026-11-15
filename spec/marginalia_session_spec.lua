@@ -248,6 +248,59 @@ describe("Session: reading and the chapter-end question", function()
     end)
 end)
 
+describe("Session: the limit page", function()
+    it("is nil before the session has started", function()
+        assert.is_nil(newEnv().session:getLimitPage())
+    end)
+
+    it("follows sequential reading page by page", function()
+        local env = newEnv()
+        env.session:start(1)
+        readPages(env, 1, 8)
+        assert.are.equal(8, env.session:getLimitPage())
+    end)
+
+    it("does not move on a jump", function()
+        local env = newEnv()
+        env.session:start(1)
+        readPages(env, 1, 6)
+        env.session:onPageUpdate(50)
+        env.session:onPageUpdate(51)
+        assert.are.equal(6, env.session:getLimitPage())
+    end)
+
+    it("stays at the end of the chapter until the reader confirms the next one", function()
+        local env = newEnv()
+        env.session:start(1)
+        readPages(env, 1, 14) -- crosses into chapter II
+        assert.are.equal(13, env.session:getLimitPage())
+        lastAsked(env).yes()
+        assert.are.equal(14, env.session:getLimitPage())
+    end)
+
+    it("is nil (nothing allowed) when there is no table of contents", function()
+        local env = newEnv({ no_toc = true })
+        env.session:start(1)
+        assert.is_nil(env.session:getLimitPage())
+    end)
+
+    it("does not grow when the font size changes", function()
+        local env = newEnv()
+        env.session:start(1)
+        readPages(env, 1, 8)
+        env.toc = {
+            { page = 1, title = "The Idiot" }, { page = 3, title = "Contents" },
+            { page = 5, title = "PART I" }, { page = 7, title = "I." },
+            { page = 27, title = "II." }, { page = 59, title = "III." },
+        }
+        env.total = 120
+        -- twice as many pages for the same text: the boundary moves with the text,
+        -- so the limit page about doubles but covers the same words
+        local limit = env.session:getLimitPage()
+        assert.is_true(limit >= 15 and limit <= 17)
+    end)
+end)
+
 describe("Session: reader-initiated changes", function()
     it("sets the boundary where the reader says", function()
         local env = newEnv()

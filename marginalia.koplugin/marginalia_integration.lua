@@ -37,8 +37,31 @@ local function buildTocGetter(self)
     end
 end
 
+-- Install the spoiler gate FIRST, before anything that can fail: if the session
+-- cannot start, the provider still answers 0 ("nothing allowed"), never "no limit".
+function M:marginaliaInstallGate()
+    local ok, ChapterAnalyzer = pcall(require, plugin_path .. "xray_chapteranalyzer")
+    if not ok then
+        self:log("Marginalia: could not install the spoiler gate: " .. tostring(ChapterAnalyzer))
+        return
+    end
+    self._marginalia_gate = function()
+        local session = self.marginalia
+        local page = session and session:getLimitPage()
+        return page or 0
+    end
+    ChapterAnalyzer.limit_provider = self._marginalia_gate
+    self._marginalia_analyzer = ChapterAnalyzer
+end
+
+-- The last page the reader may see or send (0 = nothing).
+function M:marginaliaLimitPage()
+    return self._marginalia_gate and self._marginalia_gate() or nil
+end
+
 function M:marginaliaOnReaderReady()
     if self.marginalia then return end
+    self:marginaliaInstallGate()
     local ok, err = pcall(function()
         local Session = require(plugin_path .. "marginalia_session")
         local Prompt = require(plugin_path .. "marginalia_prompt")
@@ -82,6 +105,16 @@ end
 function M:marginaliaFlush()
     if not self.marginalia then return end
     pcall(self.marginalia.flush, self.marginalia)
+end
+
+-- Reader closed: save, and take the gate down only if it is still ours (a newly
+-- opened book installs its own).
+function M:marginaliaOnDestroy()
+    self:marginaliaFlush()
+    local analyzer = self._marginalia_analyzer
+    if analyzer and analyzer.limit_provider == self._marginalia_gate then
+        analyzer.limit_provider = nil
+    end
 end
 
 return M

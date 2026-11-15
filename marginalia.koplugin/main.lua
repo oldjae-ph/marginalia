@@ -266,7 +266,7 @@ end
 
 function XRayPlugin:destroy()
     if self.destroyed then return end
-    if self.marginaliaFlush then self:marginaliaFlush() end
+    if self.marginaliaOnDestroy then self:marginaliaOnDestroy() end
     self:log("XRayPlugin: destroy called, marking as destroyed")
     if self.cancelActiveAIRequest then
         self:cancelActiveAIRequest("Plugin destroyed")

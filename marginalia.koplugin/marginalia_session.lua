@@ -17,6 +17,7 @@
 local plugin_path = ((...) or ""):match("(.-)[^%.]+$") or ""
 local Boundary = require(plugin_path .. "marginalia_boundary")
 local Position = require(plugin_path .. "marginalia_position")
+local Limit = require(plugin_path .. "marginalia_limit")
 
 local Session = {}
 Session.__index = Session
@@ -193,6 +194,14 @@ end
 
 function Session:getLimit()
     return self.boundary and self.boundary:getLimit() or nil
+end
+
+-- Last page the reader may see or send, or nil when it cannot be worked out
+-- (no session, no TOC). Callers treat nil as "nothing allowed".
+function Session:getLimitPage()
+    if not self.boundary then return nil end
+    local toc, total = self.deps.get_toc()
+    return Limit.lastAllowedPage(toc, self.boundary:getLimit(), total)
 end
 
 function Session:flush()

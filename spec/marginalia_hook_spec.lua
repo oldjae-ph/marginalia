@@ -142,6 +142,8 @@ describe("Marginalia integration (marginalia_integration.lua)", function()
     end)
 
     after_each(function()
+        local ok, analyzer = pcall(require, "xray_chapteranalyzer")
+        if ok then analyzer.limit_provider = nil end -- never leak a gate into other specs
         UIManager.nextTick, UIManager.show = orig_nexttick, orig_show
         package.loaded["ui/widget/confirmbox"] = orig_confirmbox
         package.loaded["ui/uimanager"], package.loaded["marginalia_prompt"] = orig_uimanager, orig_prompt
@@ -215,6 +217,39 @@ describe("Marginalia integration (marginalia_integration.lua)", function()
         plugin:marginaliaOnReaderReady()
         plugin:marginaliaOnPageUpdate(21)
         assert.is_nil(dialog)
+    end)
+
+    it("installs the spoiler gate before anything can fail, and then allows nothing", function()
+        local plugin = newPlugin({ { title = "A", page = 1 } }, 1)
+        plugin.ui.document.getPageCount = function() error("document closed") end -- session cannot start
+        plugin:marginaliaOnReaderReady()
+        local analyzer = require("xray_chapteranalyzer")
+        assert.are.equal("function", type(analyzer.limit_provider))
+        assert.are.equal(0, analyzer:getLimitPage())
+        assert.are.equal(0, plugin:marginaliaLimitPage())
+    end)
+
+    it("the gate follows the reader's boundary and ignores jumps", function()
+        local plugin = newPlugin({ { title = "A", page = 1 }, { title = "B", page = 14 } }, 1)
+        plugin:marginaliaOnReaderReady()
+        local analyzer = require("xray_chapteranalyzer")
+        for p = 1, 5 do plugin:marginaliaOnPageUpdate(p) end
+        assert.are.equal(5, analyzer:getLimitPage())
+        plugin:marginaliaOnPageUpdate(40) -- TOC jump
+        plugin:marginaliaOnPageUpdate(41)
+        assert.are.equal(5, analyzer:getLimitPage())
+    end)
+
+    it("takes the gate down on close, but never another book's gate", function()
+        local analyzer = require("xray_chapteranalyzer")
+        local first = newPlugin({ { title = "A", page = 1 } }, 1)
+        first:marginaliaOnReaderReady()
+        local second = newPlugin({ { title = "A", page = 1 } }, 1)
+        second:marginaliaOnReaderReady()
+        first:marginaliaOnDestroy() -- the first book closing must not remove the second's gate
+        assert.are.equal("function", type(analyzer.limit_provider))
+        second:marginaliaOnDestroy()
+        assert.is_nil(analyzer.limit_provider)
     end)
 
     it("keeps working if starting fails", function()
