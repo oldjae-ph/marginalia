@@ -232,6 +232,8 @@ function CacheManager:saveCache(book_path, data)
     -- Add timestamp
     data.cached_at = os.time()
     data.cache_version = CURRENT_CACHE_VERSION
+    -- Marginalia: stamp the data with the spoiler boundary it was made under
+    if CacheManager.boundary_guard then CacheManager.boundary_guard.stamp(data) end
     
     local temp_file = cache_file .. ".tmp"
     local success, err = pcall(function()
@@ -318,6 +320,8 @@ function CacheManager:asyncSaveCache(book_path, data, on_done_cb)
 
     data.cached_at = os.time()
     data.cache_version = CURRENT_CACHE_VERSION
+    -- Marginalia: stamp the data with the spoiler boundary it was made under
+    if CacheManager.boundary_guard then CacheManager.boundary_guard.stamp(data) end
 
     -- Check if an active save is already in progress for this cache file
     if CacheManager._active_by_file and CacheManager._active_by_file[cache_file] then
@@ -618,6 +622,11 @@ function CacheManager:loadCache(book_path)
         AIHelper:log("CacheManager: Cache age: " .. tostring(cache_age_days) .. " days")
     end
     
+    -- Marginalia: data from past the spoiler boundary is treated as if there were no cache
+    if CacheManager.boundary_guard and not CacheManager.boundary_guard.check(self, data, book_path) then
+        return nil
+    end
+    
     return data
 end
 
@@ -701,6 +710,21 @@ function CacheManager:serialize(obj, indent, seen)
     else
         return "nil"
     end
+end
+
+-- Marginalia: set a cache file aside (renamed, never deleted) so it can no longer be loaded
+-- or overwritten. Returns the new path, or nil.
+function CacheManager:quarantine(book_path)
+    local cache_file = self:getCachePath(book_path)
+    if not cache_file then return nil end
+    local target = cache_file .. ".spoiler-" .. tostring(os.time())
+    local ok, err = os.rename(cache_file, target)
+    if not ok then
+        logger.warn("CacheManager: Failed to set cache aside:", err or "unknown")
+        return nil
+    end
+    logger.info("CacheManager: Set cache aside:", target)
+    return target
 end
 
 -- Clear cache for a book

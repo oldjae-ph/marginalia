@@ -12,12 +12,15 @@
 --   book_title  = string|nil,
 --   is_nonnarrative = function(title) -> boolean   -- xray's front/back matter test
 --   log         = function(msg)                    -- optional, never pass book text
+--   on_settled  = function()   -- optional: the boundary is now known (first-open question answered)
+--   on_lowered  = function()   -- optional: the READER moved the boundary back
 -- }
 
 local plugin_path = ((...) or ""):match("(.-)[^%.]+$") or ""
 local Boundary = require(plugin_path .. "marginalia_boundary")
 local Position = require(plugin_path .. "marginalia_position")
 local Limit = require(plugin_path .. "marginalia_limit")
+local Context = require(plugin_path .. "marginalia_context")
 
 local Session = {}
 Session.__index = Session
@@ -44,8 +47,22 @@ function Session.isSkippableTitle(title, book_title, is_nonnarrative)
 end
 
 function Session:new(deps)
-    local o = setmetatable({ deps = deps, boundary = nil, prompt_open = false, declined = nil }, self)
+    local o = setmetatable({ deps = deps, boundary = nil, prompt_open = false, declined = nil, settled = false }, self)
     return o
+end
+
+-- Has the boundary been established? False while the first-open question is
+-- unanswered: until then nothing saved may be trusted or shown.
+function Session:isSettled()
+    return self.settled == true
+end
+
+function Session:_notify(name)
+    local fn = self.deps[name]
+    if fn then
+        local ok, err = pcall(fn)
+        if not ok then self:_log(name .. " failed: " .. tostring(err)) end
+    end
 end
 
 function Session:_log(msg)
@@ -103,6 +120,7 @@ function Session:start(current_page)
     self.boundary = b
     if saved ~= nil and ok then
         self:_log("boundary restored at chapter " .. tostring(b:getConfirmedChapter()))
+        self.settled = true
         return
     end
     if saved ~= nil then self:_log("saved boundary unreadable, starting from the beginning") end
@@ -110,6 +128,7 @@ function Session:start(current_page)
     local pos, step = Position.fromPage(toc, current_page, total)
     if not pos then
         self:_log("no table of contents, boundary stays at the start")
+        self.settled = true
         return
     end
     local first_story = self:_firstStoryIndex()
@@ -117,6 +136,7 @@ function Session:start(current_page)
         or (pos.chapter == first_story and pos.frac <= 3 * step + 1e-9)
     if at_start then
         self:_persist(true)
+        self.settled = true
         return
     end
     self.prompt_open = true
@@ -125,10 +145,14 @@ function Session:start(current_page)
             self.prompt_open = false
             self.boundary:setByReader(pos.chapter, pos.frac)
             self:_persist(true)
+            self.settled = true
+            self:_notify("on_settled")
         end,
         function() -- "Start of the book"
             self.prompt_open = false
             self:_persist(true)
+            self.settled = true
+            self:_notify("on_settled")
         end)
 end
 
@@ -172,13 +196,22 @@ function Session:_askFinished(chapter)
 end
 
 -- Reader-initiated changes. Never call these from automatic code paths.
+-- After a reader-initiated change: tell the plugin when the boundary went BACK,
+-- because saved X-Ray data made under the old, further boundary is now past it.
+function Session:_afterReaderChange(before)
+    self:_persist(true)
+    local order = Context.compare(self.boundary:getLimit(), before)
+    if order == nil or order < 0 then self:_notify("on_lowered") end
+end
+
 function Session:setBoundaryAtPage(page)
     if not self.boundary then return false end
     local toc, total = self.deps.get_toc()
     self.toc = toc
     local pos = Position.fromPage(toc, page, total)
+    local before = self.boundary:getLimit()
     if not pos or not self.boundary:setByReader(pos.chapter, pos.frac) then return false end
-    self:_persist(true)
+    self:_afterReaderChange(before)
     return true
 end
 
@@ -187,8 +220,9 @@ function Session:rollBackToPage(page)
     local toc, total = self.deps.get_toc()
     self.toc = toc
     local pos = Position.fromPage(toc, page, total)
+    local before = self.boundary:getLimit()
     if not pos or not self.boundary:rollBack(pos.chapter, pos.frac) then return false end
-    self:_persist(true)
+    self:_afterReaderChange(before)
     return true
 end
 

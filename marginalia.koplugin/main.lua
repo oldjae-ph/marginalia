@@ -559,6 +559,9 @@ end
 function XRayPlugin:onReaderReady()
     self._cached_toc = nil
     self:clearPendingBackgroundFetch()
+    -- Marginalia: establish the spoiler boundary BEFORE saved data is loaded, so the
+    -- loaded data can be checked against it
+    if self.marginaliaOnReaderReady then self:marginaliaOnReaderReady() end
     self:autoLoadCache()
     -- Reset per-session chapter fetch tracking
     self.last_auto_chapter = nil
@@ -567,7 +570,6 @@ function XRayPlugin:onReaderReady()
     self.bg_fetch_pending = false
     self:clearPendingBackgroundFetch()
     self._reader_ready = true
-    if self.marginaliaOnReaderReady then self:marginaliaOnReaderReady() end
     self.unit_xp_matches = nil
     self.unit_conversion_boxes = nil
     self.last_settings_state = nil

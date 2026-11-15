@@ -180,6 +180,8 @@ local specs = {
     "spec/marginalia_hook_spec.lua",
     "spec/marginalia_gate_spec.lua",
     "spec/marginalia_fetch_spec.lua",
+    "spec/marginalia_context_spec.lua",
+    "spec/marginalia_data_spec.lua",
 }
 
 if arg and arg[1] then

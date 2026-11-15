@@ -5,6 +5,7 @@
 -- key "marginalia_boundary" (separate from xray's cache file and settings keys).
 
 local plugin_path = ((...) or ""):match("(.-)[^%.]+$") or ""
+local Context = require(plugin_path .. "marginalia_context")
 
 local M = {}
 
@@ -52,6 +53,110 @@ function M:marginaliaInstallGate()
     end
     ChapterAnalyzer.limit_provider = self._marginalia_gate
     self._marginalia_analyzer = ChapterAnalyzer
+
+    -- Saved X-Ray data: stamp on every save, check on every load (see xray_cachemanager.lua)
+    local ok_cm, CacheManager = pcall(require, plugin_path .. "xray_cachemanager")
+    if ok_cm then
+        self._marginalia_cache_guard = {
+            stamp = function(data) self:marginaliaStampCache(data) end,
+            check = function(cm, data, book_path) return self:marginaliaCheckCache(cm, data, book_path) end,
+        }
+        CacheManager.boundary_guard = self._marginalia_cache_guard
+        self._marginalia_cache_class = CacheManager
+    else
+        self:log("Marginalia: could not install the cache guard: " .. tostring(CacheManager))
+    end
+end
+
+-- Write the boundary this data was made under into the cache.
+function M:marginaliaStampCache(data)
+    local session = self.marginalia
+    if type(data) ~= "table" or not session or not session:isSettled() then return end
+    local stamp = Context.makeStamp(session:getLimit())
+    if stamp then data.marginalia_boundary = stamp end
+end
+
+-- May this saved data be used? Fails closed: no session, an unanswered first-open
+-- question, or no table of contents all mean "no". Data from past the boundary is
+-- set aside (renamed, never deleted) and treated as if there were no cache.
+function M:marginaliaCheckCache(cm, data, book_path)
+    local session = self.marginalia
+    if not session or not session:isSettled() then return false end
+    local limit, limit_page = session:getLimit(), session:getLimitPage()
+    if not limit_page then return false end -- cannot judge: hide it, leave the file alone
+    if not Context.isTainted(data, limit, limit_page) then return true end
+    self:log("Marginalia: saved X-Ray data reaches past your boundary; setting it aside")
+    if cm and cm.quarantine then cm:quarantine(book_path) end
+    return false
+end
+
+-- Forget everything X-Ray holds in memory for this book.
+function M:marginaliaClearData()
+    self.book_data = {}
+    self.characters, self.locations, self.timeline = {}, {}, {}
+    self.historical_figures, self.terms, self.images = {}, {}, {}
+    self.chapters_fetched = {}
+    self.terms_fetched = false
+    self.series_context_loaded = false
+    self.xray_mode_enabled = false
+end
+
+-- Drop memory and load again through the guard (so tainted data is set aside).
+function M:marginaliaReloadData()
+    self:marginaliaClearData()
+    if self.autoLoadCache then
+        local ok, err = pcall(self.autoLoadCache, self)
+        if not ok then self:log("Marginalia: reloading saved data failed: " .. tostring(err)) end
+    end
+end
+
+-- The first-open question was answered: saved data can now be judged.
+function M:marginaliaOnSettled()
+    self:marginaliaReloadData()
+end
+
+-- The READER moved the boundary back: whatever was made under the old, further
+-- boundary is now past it. Stop anything in flight, drop unsaved writes (they
+-- would be stamped with the new boundary), and reload through the guard.
+function M:marginaliaOnLowered()
+    if self.cancelActiveAIRequest then
+        pcall(self.cancelActiveAIRequest, self, "Boundary moved back")
+    end
+    local cm = self.cache_manager
+    if cm and cm.cancelAsyncSaves then pcall(cm.cancelAsyncSaves, cm) end
+    self:marginaliaReloadData()
+end
+
+-- "Full book" mode would tell the AI that nothing is off limits. Marginalia has no
+-- such mode: force spoiler-free whenever settings are loaded or saved.
+function M:marginaliaLockSpoilerMode()
+    local helper = self.ai_helper
+    if type(helper) ~= "table" then return end
+    local function force(h)
+        if type(h.settings) == "table" then h.settings.spoiler_setting = "spoiler_free" end
+    end
+    if not helper._marginalia_locked then
+        helper._marginalia_locked = true
+        local orig_save, orig_load = helper.saveSettings, helper.loadSettings
+        if type(orig_save) == "function" then
+            helper.saveSettings = function(h, new_settings, keys_to_delete)
+                if type(new_settings) == "table" and new_settings.spoiler_setting ~= nil then
+                    new_settings.spoiler_setting = "spoiler_free"
+                end
+                local result = orig_save(h, new_settings, keys_to_delete)
+                force(h)
+                return result
+            end
+        end
+        if type(orig_load) == "function" then
+            helper.loadSettings = function(h, ...)
+                local result = orig_load(h, ...)
+                force(h)
+                return result
+            end
+        end
+    end
+    force(helper)
 end
 
 -- The last page the reader may see or send (0 = nothing).
@@ -73,6 +178,7 @@ end
 function M:marginaliaOnReaderReady()
     if self.marginalia then return end
     self:marginaliaInstallGate()
+    self:marginaliaLockSpoilerMode()
     local ok, err = pcall(function()
         local Session = require(plugin_path .. "marginalia_session")
         local Prompt = require(plugin_path .. "marginalia_prompt")
@@ -96,6 +202,8 @@ function M:marginaliaOnReaderReady()
             book_title = book_title,
             is_nonnarrative = function(title) return self:isNonNarrativeChapter(title) end,
             log = function(msg) self:log(msg) end,
+            on_settled = function() self:marginaliaOnSettled() end,
+            on_lowered = function() self:marginaliaOnLowered() end,
         })
         self.marginalia = session
         session:start(self:getCurrentPage())
@@ -125,6 +233,10 @@ function M:marginaliaOnDestroy()
     local analyzer = self._marginalia_analyzer
     if analyzer and analyzer.limit_provider == self._marginalia_gate then
         analyzer.limit_provider = nil
+    end
+    local cm_class = self._marginalia_cache_class
+    if cm_class and cm_class.boundary_guard == self._marginalia_cache_guard then
+        cm_class.boundary_guard = nil
     end
 end
 

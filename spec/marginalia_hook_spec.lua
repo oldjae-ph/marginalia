@@ -144,6 +144,8 @@ describe("Marginalia integration (marginalia_integration.lua)", function()
     after_each(function()
         local ok, analyzer = pcall(require, "xray_chapteranalyzer")
         if ok then analyzer.limit_provider = nil end -- never leak a gate into other specs
+        local ok_cm, cache_class = pcall(require, "xray_cachemanager")
+        if ok_cm then cache_class.boundary_guard = nil end
         UIManager.nextTick, UIManager.show = orig_nexttick, orig_show
         package.loaded["ui/widget/confirmbox"] = orig_confirmbox
         package.loaded["ui/uimanager"], package.loaded["marginalia_prompt"] = orig_uimanager, orig_prompt
