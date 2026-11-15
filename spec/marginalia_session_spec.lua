@@ -17,7 +17,8 @@ local TOTAL = 60
 
 local function newEnv(opts)
     opts = opts or {}
-    local env = { saves = {}, asked_finished = {}, asked_initial = 0, toc = opts.toc or TOC, total = opts.total or TOTAL }
+    local env = { saves = {}, asked_finished = {}, asked_initial = 0, toc = opts.toc or TOC, total = opts.total or TOTAL,
+        lowered = 0, settled = 0 }
     env.store = {
         data = opts.saved,
         load = function() return env.store.data end,
@@ -45,6 +46,8 @@ local function newEnv(opts)
         prompter = env.prompter,
         book_title = "The Idiot",
         is_nonnarrative = function(t) return t:lower() == "contents" end,
+        on_lowered = function() env.lowered = env.lowered + 1 end,
+        on_settled = function() env.settled = env.settled + 1 end,
     })
     return env
 end
@@ -333,5 +336,158 @@ describe("Session: reader-initiated changes", function()
         env.total = 120
         env.session:onPageUpdate(60) -- somewhere in chapter III
         assert.are.same(before, env.session:getLimit())
+    end)
+end)
+
+describe("Session: describing the boundary", function()
+    it("is nil before the session has started", function()
+        assert.is_nil(newEnv().session:describe())
+    end)
+
+    it("says 'start of the book' (no title) at the very start", function()
+        local env = newEnv()
+        env.session:start(1)
+        local d = env.session:describe()
+        assert.is_true(d.settled)
+        assert.is_nil(d.title)
+    end)
+
+    it("names the chapter and how far through it, skipping front matter", function()
+        local env = newEnv()
+        env.session:start(1)
+        readPages(env, 1, 8)
+        local d = env.session:describe()
+        assert.are.equal("I.", d.title)
+        assert.are.equal(50, d.percent) -- end of page 8 = 5 of 10 pages into chapter I
+    end)
+
+    it("is not settled while the first-open question is showing", function()
+        local env = newEnv()
+        env.session:start(20)
+        assert.is_false(env.session:describe().settled)
+    end)
+end)
+
+describe("Session: planning and applying reader changes", function()
+    it("plans a move to the end of a page and says whether it goes back", function()
+        local env = newEnv()
+        env.session:start(1)
+        local forward = env.session:planAtPage(20)
+        assert.are.equal(5, forward.chapter)
+        assert.is_false(forward.lowers)
+        assert.is_false(forward.same)
+        env.session:apply(forward)
+        assert.is_true(env.session:planAtPage(8).lowers)
+        assert.is_true(env.session:planAtPage(20).same)
+    end)
+
+    it("plans nothing it cannot place", function()
+        local env = newEnv()
+        env.session:start(1)
+        assert.is_nil(env.session:planAtPage(0))
+        assert.is_nil(env.session:planAtPage(999))
+        assert.is_nil(env.session:planAtChapterEnd(99))
+        assert.is_nil(env.session:planAtChapterEnd("x"))
+        assert.is_nil(newEnv().session:planAtPage(5)) -- not started
+        assert.is_nil(newEnv({ no_toc = true }).session:planAtPage(5))
+    end)
+
+    it("plans 'I have finished chapter N' as the end of that chapter", function()
+        local env = newEnv()
+        env.session:start(1)
+        local plan = env.session:planAtChapterEnd(5)
+        assert.are.equal(5, plan.chapter)
+        assert.are.equal(1, plan.frac)
+        assert.are.equal("II.", plan.title)
+    end)
+
+    it("plans the start of the book", function()
+        local env = newEnv()
+        env.session:start(1)
+        assert.is_true(env.session:planAtStart().same)
+        env.session:apply(env.session:planAtChapterEnd(5))
+        local plan = env.session:planAtStart()
+        assert.is_true(plan.lowers)
+        assert.are.equal(1, plan.chapter)
+        assert.are.equal(0, plan.frac)
+    end)
+
+    it("changes nothing until a plan is applied", function()
+        local env = newEnv()
+        env.session:start(1)
+        local before = env.session:getLimit()
+        env.session:planAtPage(20); env.session:planAtChapterEnd(5); env.session:planAtStart()
+        assert.are.same(before, env.session:getLimit())
+    end)
+
+    it("applying a forward plan moves the boundary, saves it, and does not announce 'lowered'", function()
+        local env = newEnv()
+        env.session:start(1)
+        assert.is_true(env.session:apply(env.session:planAtChapterEnd(5)))
+        assert.are.same({ chapter = 5, frac = 1 }, env.session:getLimit())
+        assert.is_true(env.saves[#env.saves].flush)
+        assert.are.equal(0, env.lowered)
+    end)
+
+    it("applying a plan that goes back announces 'lowered'", function()
+        local env = newEnv()
+        env.session:start(1)
+        env.session:apply(env.session:planAtChapterEnd(6))
+        assert.is_true(env.session:apply(env.session:planAtPage(8)))
+        assert.are.equal(1, env.lowered)
+    end)
+
+    it("refuses garbage plans", function()
+        local env = newEnv()
+        env.session:start(1)
+        assert.is_false(env.session:apply(nil))
+        assert.is_false(env.session:apply("x"))
+        assert.is_false(env.session:apply({ chapter = 0, frac = 0.5 }))
+        assert.is_false(env.session:apply({ chapter = 2, frac = 0 / 0 }))
+        assert.is_false(newEnv().session:apply({ chapter = 2, frac = 0.5 })) -- not started
+        assert.are.same({ chapter = 1, frac = 0 }, env.session:getLimit())
+    end)
+
+    it("a choice from the menu settles an unanswered first-open question, and the late answer cannot undo it", function()
+        local env = newEnv()
+        env.session:start(20) -- question showing
+        assert.is_false(env.session:isSettled())
+        assert.is_true(env.session:apply(env.session:planAtChapterEnd(4)))
+        assert.is_true(env.session:isSettled())
+        assert.are.equal(1, env.settled)
+        env.initial.here() -- the reader taps the old question afterwards
+        assert.are.same({ chapter = 4, frac = 1 }, env.session:getLimit())
+        env.initial.start()
+        assert.are.same({ chapter = 4, frac = 1 }, env.session:getLimit())
+    end)
+end)
+
+describe("Session: chapter choices", function()
+    it("lists real chapters only and marks the current one", function()
+        local env = newEnv()
+        env.session:start(1)
+        readPages(env, 1, 8)
+        local list = env.session:chapterChoices()
+        local titles = {}
+        for _, c in ipairs(list) do titles[#titles + 1] = c.title end
+        assert.are.same({ "I.", "II.", "III." }, titles)
+        assert.is_true(list[1].is_current)
+        assert.is_false(list[2].is_current)
+        assert.are.equal(4, list[1].index) -- index in the table of contents
+    end)
+
+    it("is empty without a session or a table of contents", function()
+        assert.are.same({}, newEnv().session:chapterChoices())
+        local env = newEnv({ no_toc = true })
+        env.session:start(1)
+        assert.are.same({}, env.session:chapterChoices())
+    end)
+
+    it("gives untitled chapters a name", function()
+        local env = newEnv({ toc = { { page = 1, title = "Intro chapter" }, { page = 10, title = "  " }, { page = 20, title = "Three" } }, total = 30 })
+        env.session:start(1)
+        local list = env.session:chapterChoices()
+        assert.is_true(#list >= 2)
+        for _, c in ipairs(list) do assert.is_true(c.title ~= "") end
     end)
 end)

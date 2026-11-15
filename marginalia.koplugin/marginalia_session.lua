@@ -143,6 +143,7 @@ function Session:start(current_page)
     self.deps.prompter.askInitial(
         function() -- "I've read up to here"
             self.prompt_open = false
+            if self.settled then return end -- the reader already chose from the menu
             self.boundary:setByReader(pos.chapter, pos.frac)
             self:_persist(true)
             self.settled = true
@@ -150,6 +151,7 @@ function Session:start(current_page)
         end,
         function() -- "Start of the book"
             self.prompt_open = false
+            if self.settled then return end
             self:_persist(true)
             self.settled = true
             self:_notify("on_settled")
@@ -224,6 +226,103 @@ function Session:rollBackToPage(page)
     if not pos or not self.boundary:rollBack(pos.chapter, pos.frac) then return false end
     self:_afterReaderChange(before)
     return true
+end
+
+-- Reader-facing changes come in two steps so a menu can explain before it acts:
+-- plan*() says where the boundary would go (and whether that is BACK), apply()
+-- does it. Only the reader's menu calls apply().
+function Session:_planAt(pos)
+    if not self.boundary or not pos then return nil end
+    local order = Context.compare(pos, self.boundary:getLimit())
+    local entry = self.toc and self.toc[pos.chapter]
+    local title = entry and trim(entry.title) or ""
+    return {
+        chapter = pos.chapter,
+        frac = pos.frac,
+        lowers = order ~= nil and order < 0,
+        same = order == 0,
+        title = title ~= "" and title or nil,
+    }
+end
+
+function Session:planAtPage(page)
+    if not self.boundary then return nil end
+    local toc, total = self.deps.get_toc()
+    self.toc = toc
+    return self:_planAt((Position.fromPage(toc, page, total)))
+end
+
+-- "I have finished chapter <index>": the end of that chapter.
+function Session:planAtChapterEnd(index)
+    if not self.boundary then return nil end
+    local toc = self.deps.get_toc()
+    self.toc = toc
+    if type(index) ~= "number" or not toc or not toc[index] then return nil end
+    return self:_planAt({ chapter = index, frac = 1 })
+end
+
+function Session:planAtStart()
+    if not self.boundary then return nil end
+    self.toc = self.deps.get_toc()
+    return self:_planAt({ chapter = self.boundary.first_chapter, frac = 0 })
+end
+
+function Session:apply(plan)
+    if not self.boundary or type(plan) ~= "table" then return false end
+    local before = self.boundary:getLimit()
+    if not self.boundary:setByReader(plan.chapter, plan.frac) then return false end
+    if not self.settled then
+        -- the reader chose a boundary before answering the first-open question
+        self:_persist(true)
+        self.settled = true
+        self:_notify("on_settled")
+        return true
+    end
+    self:_afterReaderChange(before)
+    return true
+end
+
+-- Chapters a reader can say they have finished: real chapters, not front matter.
+function Session:chapterChoices()
+    if not self.boundary then return {} end
+    local toc = self.deps.get_toc()
+    self.toc = toc
+    local current = self.boundary:getConfirmedChapter()
+    local list = {}
+    for i, entry in ipairs(toc or {}) do
+        if not self:_isSkippableIndex(i) then
+            local title = trim(entry.title)
+            list[#list + 1] = {
+                index = i,
+                title = title ~= "" and title or ("Chapter " .. i),
+                is_current = (i == current),
+            }
+        end
+    end
+    return list
+end
+
+-- For display: where is the boundary? title is nil at the start of the book.
+function Session:describe()
+    if not self.boundary then return nil end
+    self.toc = self.deps.get_toc()
+    local limit = self.boundary:getLimit()
+    local title
+    for i = limit.chapter, 1, -1 do
+        if not self:_isSkippableIndex(i) then
+            local e = self.toc and self.toc[i]
+            title = e and trim(e.title) ~= "" and trim(e.title) or ("Chapter " .. i)
+            break
+        end
+    end
+    local at_start = limit.chapter == self.boundary.first_chapter and limit.frac <= 1e-9
+    return {
+        settled = self:isSettled(),
+        chapter = limit.chapter,
+        frac = limit.frac,
+        percent = math.floor(limit.frac * 100 + 1e-6),
+        title = (not at_start) and title or nil,
+    }
 end
 
 function Session:getLimit()

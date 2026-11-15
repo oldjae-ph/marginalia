@@ -59,4 +59,46 @@ function Prompt.askInitial(on_here, on_start)
     end)
 end
 
+-- ---------------------------------------------------------------------------
+-- Dialogs for the Spoiler boundary menu (see marginalia_menu.lua).
+-- ---------------------------------------------------------------------------
+
+-- A yes/cancel question. Cancel (or back, or tapping outside) does nothing.
+function Prompt.confirm(text, ok_text, on_ok)
+    local yes = once(on_ok)
+    UIManager:show(ConfirmBox:new{
+        text = text,
+        ok_text = ok_text,
+        cancel_text = "Cancel",
+        ok_callback = yes,
+    })
+end
+
+function Prompt.info(text)
+    local InfoMessage = require("ui/widget/infomessage")
+    UIManager:show(InfoMessage:new{ text = text, timeout = 6 })
+end
+
+-- A full-screen list of chapters; choosing one calls on_pick(choice).
+function Prompt.pickChapter(title, choices, on_pick)
+    local Menu = require("ui/widget/menu")
+    local items = {}
+    for _, choice in ipairs(choices) do
+        items[#items + 1] = {
+            text = choice.title .. (choice.is_current and "   (current)" or ""),
+            callback = function() on_pick(choice) end,
+        }
+    end
+    local menu
+    menu = Menu:new{
+        title = title,
+        item_table = items,
+        is_borderless = true,
+        is_popout = false,
+        covers_fullscreen = true,
+        close_callback = function() UIManager:close(menu) end,
+    }
+    UIManager:show(menu)
+end
+
 return Prompt

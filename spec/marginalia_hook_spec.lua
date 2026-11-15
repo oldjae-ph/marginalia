@@ -263,3 +263,53 @@ describe("Marginalia integration (marginalia_integration.lua)", function()
         assert.is_true(true)
     end)
 end)
+
+describe("Marginalia menu hook in main.lua", function()
+    local function menuPlugin(with_marginalia)
+        local p = setmetatable({
+            destroyed = false,
+            log = function() end,
+            getCurrentPage = function() return 1 end,
+            loc = { t = function() return nil end },
+            ai_helper = { settings = {}, hasApiKey = function() return true end },
+            characters = {}, timeline = {}, locations = {}, terms = {}, historical_figures = {},
+            book_data = {}, ui = { document = {}, getCurrentPage = function() return 1 end },
+        }, { __index = XRayPlugin })
+        if with_marginalia then
+            p.marginalia = {
+                describe = function() return { settled = true, title = "II.", percent = 44 } end,
+            }
+        end
+        return p
+    end
+
+    it("puts 'Spoiler boundary' first in the X-Ray menu", function()
+        local plugin = menuPlugin(true)
+        local items = plugin:getSubMenuItems()
+        assert.are.equal('Spoiler boundary: "II.", 44% through', items[1].text_func())
+        assert.are.equal("function", type(items[1].sub_item_table_func))
+        assert.are.equal(items, plugin.current_xray_menu_table)
+    end)
+
+    it("keeps upstream's entries after it", function()
+        local items = menuPlugin(true):getSubMenuItems()
+        assert.is_true(#items > 5)
+        assert.is_not_nil(items[2].text)
+    end)
+
+    it("still shows the entry (not set yet) when tracking is not running", function()
+        local items = menuPlugin(false):getSubMenuItems()
+        assert.are.equal("Spoiler boundary: not set yet", items[1].text_func())
+    end)
+
+    it("never breaks upstream's menu if building the entry fails", function()
+        local plugin = menuPlugin(true)
+        local saved = package.loaded["marginalia_menu"]
+        package.loaded["marginalia_menu"] = { topItem = function() error("boom") end }
+        local ok, items = pcall(function() return plugin:getSubMenuItems() end)
+        package.loaded["marginalia_menu"] = saved
+        assert.is_true(ok)
+        assert.is_true(#items > 5) -- upstream's entries are all still there
+        assert.is_nil(items[1].text_func and items[1].text_func():find("Spoiler boundary", 1, true))
+    end)
+end)

@@ -2994,6 +2994,7 @@ function XRayPlugin:getSubMenuItems()
         callback = function() self:showAbout() end,
     })
 
+    if self.marginaliaAddMenuItems then self:marginaliaAddMenuItems(items) end
     self.current_xray_menu_table = items
     return items
 end

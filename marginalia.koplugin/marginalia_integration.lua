@@ -221,6 +221,20 @@ function M:marginaliaOnPageUpdate(pageno)
     if not ok then self:log("Marginalia: page update failed: " .. tostring(err)) end
 end
 
+-- Add "Spoiler boundary" to the top of the X-Ray menu. Called from getSubMenuItems().
+function M:marginaliaAddMenuItems(items)
+    local ok, err = pcall(function()
+        local MenuBuilder = require(plugin_path .. "marginalia_menu")
+        local Prompt = require(plugin_path .. "marginalia_prompt")
+        table.insert(items, 1, MenuBuilder.topItem({
+            get_session = function() return self.marginalia end,
+            current_page = function() return self:getCurrentPage() end,
+            ui = Prompt,
+        }))
+    end)
+    if not ok then self:log("Marginalia: could not add the boundary menu: " .. tostring(err)) end
+end
+
 function M:marginaliaFlush()
     if not self.marginalia then return end
     pcall(self.marginalia.flush, self.marginalia)
