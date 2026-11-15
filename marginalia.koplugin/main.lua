@@ -53,6 +53,7 @@ safeRequireMixin("xray_fetch")
 safeRequireMixin("xray_mentions")
 safeRequireMixin("xray_unitscanner")
 safeRequireMixin("xray_entityscanner")
+safeRequireMixin("marginalia_integration")
 
 
 function XRayPlugin:init()
@@ -265,6 +266,7 @@ end
 
 function XRayPlugin:destroy()
     if self.destroyed then return end
+    if self.marginaliaFlush then self:marginaliaFlush() end
     self:log("XRayPlugin: destroy called, marking as destroyed")
     if self.cancelActiveAIRequest then
         self:cancelActiveAIRequest("Plugin destroyed")
@@ -345,6 +347,7 @@ function XRayPlugin:onExit()
 end
 
 function XRayPlugin:onSuspend()
+    if self.marginaliaFlush then self:marginaliaFlush() end
     if self.flushSeriesSync then
         pcall(function() self:flushSeriesSync() end)
     end
@@ -564,6 +567,7 @@ function XRayPlugin:onReaderReady()
     self.bg_fetch_pending = false
     self:clearPendingBackgroundFetch()
     self._reader_ready = true
+    if self.marginaliaOnReaderReady then self:marginaliaOnReaderReady() end
     self.unit_xp_matches = nil
     self.unit_conversion_boxes = nil
     self.last_settings_state = nil
@@ -1731,11 +1735,18 @@ function XRayPlugin:onPageUpdate(pageno)
             self:closeAllMenus()
         end
     end
+    -- Marginalia: the confirmed spoiler boundary replaces xray's automatic fetch
+    -- (which also fired on jumps). See marginalia_integration.lua.
+    if self.marginaliaOnPageUpdate then
+        self:marginaliaOnPageUpdate(pageno)
+        return
+    end
+
     if not self.auto_fetch_enabled then
         self:clearPendingBackgroundFetch()
         return
     end
-    
+
     if not self.ui or not self.ui.document then return end
     if not self._reader_ready then return end
 

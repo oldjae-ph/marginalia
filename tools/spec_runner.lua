@@ -176,6 +176,8 @@ local specs = {
     "spec/xray_entityscanner_async_spec.lua",
     "spec/localization_xray_spec.lua",
     "spec/marginalia_boundary_spec.lua",
+    "spec/marginalia_session_spec.lua",
+    "spec/marginalia_hook_spec.lua",
 }
 
 if arg and arg[1] then
