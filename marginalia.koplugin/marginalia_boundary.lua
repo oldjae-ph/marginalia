@@ -139,12 +139,23 @@ function Boundary:update(pos, step)
         return result -- a jump into the next chapter: ignored
     end
 
-    if self.is_skippable and self.is_skippable(c) then
+    -- Nothing to ask when no story text has been passed: entering a skippable
+    -- chapter, or the first story chapter after front matter only.
+    if self.is_skippable and (self.is_skippable(c) or not self:_storyStarted()) then
         self:confirm(c)
         result.pending = nil
         result.auto_confirmed = true
     end
     return result
+end
+
+-- Has the reader confirmed any chapter that carries story text?
+function Boundary:_storyStarted()
+    if not self.is_skippable then return true end
+    for k = self.first_chapter, self.confirmed_chapter do
+        if not self.is_skippable(k) then return true end
+    end
+    return false
 end
 
 -- The reader said "yes, I finished the previous chapter".

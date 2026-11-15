@@ -213,14 +213,15 @@ describe("Boundary: front matter that carries no story", function()
         assert.are.equal(2, b:getConfirmedChapter())
     end)
 
-    it("still asks before the first real chapter", function()
+    it("does not ask when the story starts right after front matter", function()
         local b = Boundary:new({ is_skippable = skippable })
         read(b, 1, 0, 1.0)
         b:update({ chapter = 2, frac = 0.05 }, STEP)
         read(b, 2, 0.05, 1.0)
-        local r = b:update({ chapter = 3, frac = 0.05 }, STEP)
-        assert.are.equal(3, r.pending)
-        assert.are.equal(2, b:getConfirmedChapter())
+        local r = b:update({ chapter = 3, frac = 0.05 }, STEP) -- first story chapter
+        assert.is_true(r.auto_confirmed)
+        assert.is_nil(r.pending)
+        assert.are.equal(3, b:getConfirmedChapter())
     end)
 
     it("slides over an empty skippable chapter that shares a page", function()
@@ -228,8 +229,51 @@ describe("Boundary: front matter that carries no story", function()
         read(b, 1, 0, 1.0)
         -- chapter 2 has no pages of its own, the page already belongs to chapter 3
         local r = b:update({ chapter = 3, frac = 0.05 }, STEP)
+        assert.is_true(r.auto_confirmed)
+        assert.are.equal(3, b:getConfirmedChapter())
+    end)
+
+    -- chapter 1 front matter, 2 and 3 story, 4 a "PART II" heading, 5 story
+    local function partBook() return function(ch) return ch == 1 or ch == 4 end end
+
+    it("still asks between story chapters", function()
+        local b = Boundary:new({ is_skippable = partBook() })
+        read(b, 1, 0, 1.0)
+        b:update({ chapter = 2, frac = 0.05 }, STEP) -- story starts, no question
+        read(b, 2, 0.05, 1.0)
+        local r = b:update({ chapter = 3, frac = 0.05 }, STEP)
         assert.are.equal(3, r.pending)
         assert.are.equal(2, b:getConfirmedChapter())
+    end)
+
+    it("does not let a part heading give a free pass into the next story chapter", function()
+        local b = Boundary:new({ is_skippable = partBook() })
+        read(b, 1, 0, 1.0)
+        b:update({ chapter = 2, frac = 0.05 }, STEP)
+        read(b, 2, 0.05, 1.0)
+        b:update({ chapter = 3, frac = 0.05 }, STEP)
+        b:confirm(3)
+        read(b, 3, 0.05, 1.0)
+        local h = b:update({ chapter = 4, frac = 1.0 }, 1) -- heading page
+        assert.is_true(h.auto_confirmed)
+        local r = b:update({ chapter = 5, frac = 0.05 }, STEP)
+        assert.are.equal(5, r.pending)
+        assert.are.equal(4, b:getConfirmedChapter())
+        assert.is_false(b:isAllowed({ chapter = 5, frac = 0.05 }))
+    end)
+
+    it("asks when a part heading shares its page with the next story chapter", function()
+        local b = Boundary:new({ is_skippable = partBook() })
+        read(b, 1, 0, 1.0)
+        b:update({ chapter = 2, frac = 0.05 }, STEP)
+        read(b, 2, 0.05, 1.0)
+        b:update({ chapter = 3, frac = 0.05 }, STEP)
+        b:confirm(3)
+        read(b, 3, 0.05, 1.0)
+        local r = b:update({ chapter = 5, frac = 0.05 }, STEP) -- heading 4 has no page
+        assert.are.equal(5, r.pending)
+        assert.are.equal(4, b:getConfirmedChapter())
+        assert.is_false(b:isAllowed({ chapter = 5, frac = 0.05 }))
     end)
 
     it("does not slide over skippable chapters on a jump", function()
