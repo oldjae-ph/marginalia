@@ -2567,7 +2567,8 @@ function M:mergeSeriesContext(cache_data, series_info, book_text, skip_save)
         local book_path_for_idx = cache_data.book_paths and cache_data.book_paths[idx]
         local is_self = (doc_file and book_path_for_idx and doc_file == book_path_for_idx)
         local book_data = cache_data.books and cache_data.books[idx]
-        if book_data and not is_self and (not cur_title or not book_data.title or book_data.title:lower() ~= cur_title:lower()) then
+        if book_data and not is_self and (not cur_title or not book_data.title or book_data.title:lower() ~= cur_title:lower())
+            and (not self.marginaliaTrustsSeriesBook or self:marginaliaTrustsSeriesBook(book_data)) then
             for _, new_char in ipairs(book_data.characters or {}) do
                 if new_char and new_char.name and new_char.name ~= "" then
                     local found = false
@@ -2888,6 +2889,10 @@ function M:fetchSeriesContext(is_silent, init_wait_dialog, cancel_ref)
             self:log("XRayPlugin: Series: Cache MISS for book index " .. tostring(idx) .. ": " .. tostring(book.title))
             table.insert(missing_books, book)
         end
+    end
+
+    if self.marginaliaFilterSeriesTasks then
+        missing_books, books_needing_timeline_summary = self:marginaliaFilterSeriesTasks(missing_books, books_needing_timeline_summary)
     end
 
     if #missing_books == 0 and #books_needing_timeline_summary == 0 then

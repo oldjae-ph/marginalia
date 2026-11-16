@@ -77,6 +77,83 @@ function Context.isTainted(data, limit, limit_page)
     return fetched > limit_page
 end
 
+-- Series context copies what an EARLIER book in the series said into the book being
+-- read. Whether that is safe depends on how far the reader got in that earlier
+-- book, which only a boundary stamp records. So an entry is trusted only if it
+-- was made from the reader's own X-Ray data (source "local_xray", or none) and
+-- carries a valid stamp. AI summaries from the model's memory, roster stubs and
+-- unstamped (pre-Marginalia) data all fail: unknown is not safe.
+function Context.isTrustedSeriesBook(entry)
+    if type(entry) ~= "table" then return false end
+    if entry.source ~= nil and entry.source ~= "local_xray" then return false end
+    return stampPosition(entry.marginalia_boundary) ~= nil
+end
+
+local function stripFromBookParagraphs(text)
+    if type(text) ~= "string" or not text:find("%[From Book") then return text, false end
+    local kept, changed = {}, false
+    for section in (text .. "\n\n"):gmatch("(.-)\n%s*\n+") do
+        if section:match("^%s*%[From Book [%d%.]+%]") then
+            changed = true
+        elseif section:match("%S") then
+            kept[#kept + 1] = section
+        end
+    end
+    return table.concat(kept, "\n\n"), changed
+end
+
+-- Remove everything series context put into saved data: items copied from earlier
+-- books, "[From Book N]" paragraphs inside descriptions, and the flags. Used once on
+-- data saved before Marginalia checked what series context may contain. Returns
+-- how many things were removed.
+function Context.stripSeriesContext(data)
+    if type(data) ~= "table" then return 0 end
+    local removed = 0
+    for _, key in ipairs({ "characters", "locations", "historical_figures", "terms", "timeline" }) do
+        local list = data[key]
+        if type(list) == "table" then
+            local kept = {}
+            for _, item in ipairs(list) do
+                if type(item) == "table" and item.source == "series_prior" then
+                    removed = removed + 1
+                else
+                    if type(item) == "table" then
+                        for _, field in ipairs({ "description", "definition", "biography" }) do
+                            local clean, changed = stripFromBookParagraphs(item[field])
+                            if changed then item[field] = clean; removed = removed + 1 end
+                        end
+                        item.is_series, item.from_series = nil, nil
+                    end
+                    kept[#kept + 1] = item
+                end
+            end
+            data[key] = kept
+        end
+    end
+    if data.series_context_loaded then
+        data.series_context_loaded = false
+        removed = removed + 1
+    end
+    return removed
+end
+
+-- Does saved data hold anything series context put there?
+function Context.hasSeriesContext(data)
+    if type(data) ~= "table" then return false end
+    if data.series_context_loaded == true then return true end
+    for _, key in ipairs({ "characters", "locations", "historical_figures", "terms", "timeline" }) do
+        local list = data[key]
+        if type(list) == "table" then
+            for _, item in ipairs(list) do
+                if type(item) == "table" and (item.source == "series_prior" or item.from_series or item.is_series) then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
 -- "Mentions" are snippets of book text saved inside each entity. Data can be
 -- within the boundary and still hold mentions from further on (made when the
 -- scan followed the reader's page). Drop those, and pull last_mention_page back

@@ -184,6 +184,7 @@ local specs = {
     "spec/marginalia_data_spec.lua",
     "spec/marginalia_menu_spec.lua",
     "spec/marginalia_mentions_spec.lua",
+    "spec/marginalia_series_spec.lua",
 }
 
 if arg and arg[1] then

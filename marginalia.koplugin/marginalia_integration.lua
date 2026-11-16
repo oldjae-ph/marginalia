@@ -73,13 +73,25 @@ function M:marginaliaStampCache(data)
     local session = self.marginalia
     if type(data) ~= "table" or not session or not session:isSettled() then return end
     local stamp = Context.makeStamp(session:getLimit())
-    if stamp then data.marginalia_boundary = stamp end
+    if stamp then
+        data.marginalia_boundary = stamp
+        -- Everything in memory has passed the series-context check (see below), so
+        -- from now on this data need not be cleaned again when it is loaded.
+        data.marginalia_series_checked = true
+    end
 end
 
 -- May this saved data be used? Fails closed: no session, an unanswered first-open
 -- question, or no table of contents all mean "no". Data from past the boundary is
 -- set aside (renamed, never deleted) and treated as if there were no cache.
 function M:marginaliaCheckCache(cm, data, book_path)
+    -- Another book's saved data (series features read the earlier books): the
+    -- boundary here is for the book being read, so it cannot judge that data, and
+    -- must never set that other book's file aside. What series context may take
+    -- from it is decided separately (marginaliaTrustsSeriesBook).
+    local doc = self.ui and self.ui.document
+    if book_path and doc and doc.file and book_path ~= doc.file then return true end
+
     local session = self.marginalia
     if not session or not session:isSettled() then return false end
     local limit, limit_page = session:getLimit(), session:getLimitPage()
@@ -88,6 +100,13 @@ function M:marginaliaCheckCache(cm, data, book_path)
         -- usable, but trim saved mention snippets that reach past the boundary
         local removed = Context.pruneMentions(data, limit_page)
         if removed > 0 then self:log("Marginalia: dropped " .. removed .. " saved mention(s) past your boundary") end
+        -- Series context saved before this check existed may hold AI summaries or
+        -- unchecked data from earlier books: remove it once; it is rebuilt from
+        -- trusted entries when series context is next loaded.
+        if not data.marginalia_series_checked and Context.hasSeriesContext(data) then
+            local stripped = Context.stripSeriesContext(data)
+            self:log("Marginalia: removed " .. stripped .. " unchecked series-context item(s); they will be rebuilt")
+        end
         return true
     end
     self:log("Marginalia: saved X-Ray data reaches past your boundary; setting it aside")
@@ -124,12 +143,61 @@ end
 -- boundary is now past it. Stop anything in flight, drop unsaved writes (they
 -- would be stamped with the new boundary), and reload through the guard.
 function M:marginaliaOnLowered()
+    self:marginaliaTrimSeriesEntry()
     if self.cancelActiveAIRequest then
         pcall(self.cancelActiveAIRequest, self, "Boundary moved back")
     end
     local cm = self.cache_manager
     if cm and cm.cancelAsyncSaves then pcall(cm.cancelAsyncSaves, cm) end
     self:marginaliaReloadData()
+end
+
+-- Series context: which earlier-book entries may be copied into this book, and which
+-- AI jobs may run for them.
+--   trusted   made from the reader's own X-Ray data and stamped with how far they got
+--   not       AI summaries from the model's memory (could reveal the whole earlier
+--             book), roster stubs, unstamped data
+function M:marginaliaTrustsSeriesBook(entry)
+    return Context.isTrustedSeriesBook(entry)
+end
+
+-- fetchSeriesContext lists books to fetch from the AI's memory and books whose events
+-- it will send to the AI to summarize. Nothing is fetched from memory, and only
+-- trusted entries are summarized. Returns the two filtered lists.
+function M:marginaliaFilterSeriesTasks(missing_books, summary_jobs)
+    local kept = {}
+    for _, job in ipairs(summary_jobs or {}) do
+        if self:marginaliaTrustsSeriesBook(job.book) then kept[#kept + 1] = job end
+    end
+    if missing_books and #missing_books > 0 then
+        self:log("Marginalia: not fetching " .. #missing_books .. " earlier book summary(ies) from the AI's memory")
+    end
+    return {}, kept
+end
+
+-- This book's own copy in the series file was made under a boundary that has now been
+-- moved back: drop it, so later books cannot be given what was un-read. (The saved
+-- X-Ray data itself is set aside, not deleted; this is only the derived copy.)
+function M:marginaliaTrimSeriesEntry()
+    local ok, err = pcall(function()
+        local manager = self.series_manager
+        local session = self.marginalia
+        local doc = self.ui and self.ui.document
+        local slug = self.book_data and self.book_data.series_slug
+        if not (manager and session and doc and doc.file and slug) then return end
+        local cache = manager:loadSeriesCache(slug)
+        if not (cache and cache.books and cache.book_paths) then return end
+        local limit, changed = session:getLimit(), false
+        for index, path in pairs(cache.book_paths) do
+            local entry = cache.books[index]
+            if path == doc.file and entry and Context.compare(entry.marginalia_boundary, limit) == 1 then
+                cache.books[index] = nil
+                changed = true
+            end
+        end
+        if changed then manager:saveSeriesCache(slug, cache) end
+    end)
+    if not ok then self:log("Marginalia: could not trim the series entry: " .. tostring(err)) end
 end
 
 -- "Full book" mode would tell the AI that nothing is off limits. Marginalia has no

@@ -917,6 +917,10 @@ function SeriesManager:syncBookToSeriesCache(slug, index, book_data, book_path, 
         timeline = timeline,
         source = source,
         timeline_summarized = timeline_summarized,
+        -- Marginalia: how far the reader had read when this was made (the book's own
+        -- stamp, never a guess); without it later books will not use this entry.
+        marginalia_boundary = (has_new_entities and book_data.marginalia_boundary)
+            or (not has_new_entities and existing_entry and existing_entry.marginalia_boundary) or nil,
     }
 
     if not existing_entry or not deepEqual(existing_entry, new_entry) then
