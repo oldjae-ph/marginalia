@@ -10,6 +10,9 @@ local SpoilerCheck = require(plugin_path .. "marginalia_spoilercheck")
 
 local M = {}
 
+-- The reading guide's methods (marginalia_guideflow.lua) live on the plugin too.
+for name, fn in pairs(require(plugin_path .. "marginalia_guideflow")) do M[name] = fn end
+
 -- Flat TOC as {page, title} sorted by page, entries without a page dropped.
 -- Rebuilt whenever the page count changes (font size or margin changes repaginate).
 local function buildTocGetter(self)
@@ -135,9 +138,20 @@ function M:marginaliaReloadData()
     end
 end
 
+-- Offer the reading guide a moment after the page is up, never on top of another
+-- question (it waits for the boundary to be settled).
+function M:marginaliaGuideScheduleOffer()
+    require("ui/uimanager"):scheduleIn(3, function()
+        if self.destroyed or not self.ui or not self.ui.document then return end
+        local ok, err = pcall(self.marginaliaGuideMaybeOffer, self)
+        if not ok then self:log("Marginalia: could not offer the reading guide: " .. tostring(err)) end
+    end)
+end
+
 -- The first-open question was answered: saved data can now be judged.
 function M:marginaliaOnSettled()
     self:marginaliaReloadData()
+    self:marginaliaGuideScheduleOffer()
 end
 
 -- The READER moved the boundary back: whatever was made under the old, further
@@ -375,6 +389,8 @@ function M:marginaliaOnReaderReady()
         })
         self.marginalia = session
         session:start(self:getCurrentPage())
+        -- already settled (book opened at its start, or answered before): offer now
+        if session:isSettled() then self:marginaliaGuideScheduleOffer() end
     end)
     if not ok then
         self.marginalia = nil
@@ -456,6 +472,9 @@ function M:marginaliaAddMenuItems(items)
             current_page = function() return self:getCurrentPage() end,
             ui = Prompt,
         }))
+        local guide_item = self:marginaliaGuideMenuItem()
+        guide_item.text = "Reading guide"
+        table.insert(items, 2, guide_item)
     end)
     if not ok then self:log("Marginalia: could not add the boundary menu: " .. tostring(err)) end
 end

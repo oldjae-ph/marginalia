@@ -188,6 +188,7 @@ local specs = {
     "spec/marginalia_prompts_spec.lua",
     "spec/marginalia_updater_spec.lua",
     "spec/marginalia_spoilercheck_spec.lua",
+    "spec/marginalia_guide_spec.lua",
 }
 
 if arg and arg[1] then

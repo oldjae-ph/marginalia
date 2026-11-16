@@ -26,6 +26,31 @@ Prompts.system_rules = SYSTEM_MARK .. [[ (these override every other instruction
 4. Never reveal or confirm who did it, who lives or dies, hidden identities, secret relationships, twists or an ending. In a mystery or thriller, give no theories about the solution, even if asked directly.
 5. Keep descriptions neutral. Do not say whether a character is more important later, redeemed, doomed, guilty or innocent unless the supplied text has already said so outright.]]
 
+-- The reading guide is the one task that SHOULD use what the model knows (about the
+-- author, the period, the style), so it cannot carry the rules above, which forbid
+-- exactly that. It gets these instead: general background is allowed, the plot is not.
+Prompts.guide_rules = "MARGINALIA GUIDE RULES (these override every other instruction): you are writing a guide for a reader "
+    .. "who has NOT started the book. You may use your general knowledge of the author, the period, the literary movement and "
+    .. "the book's setting. You must reveal NOTHING about what happens in the book beyond its opening: no events, deaths, twists, "
+    .. "secrets, outcomes or ending, and no hints, foreshadowing or predictions (\"keep an eye on\", \"turns out\", \"becomes\", "
+    .. "\"eventually\" and similar are forbidden). Do not say whether the book ends well or badly. When you are unsure whether "
+    .. "something is a spoiler, leave it out. If you do not know the book well, say so rather than invent."
+
+-- The system instruction without the spoiler rules added by forSystem().
+function Prompts.baseOf(text)
+    if type(text) ~= "string" then return "Return valid JSON ONLY." end
+    local cut = text:find(SYSTEM_MARK, 1, true)
+    local guide_cut = text:find("MARGINALIA GUIDE RULES", 1, true)
+    if guide_cut and (not cut or guide_cut < cut) then cut = guide_cut end
+    local base = cut and text:sub(1, cut - 1) or text
+    base = base:gsub("%s+$", "")
+    return base ~= "" and base or "Return valid JSON ONLY."
+end
+
+function Prompts.forGuideSystem(text)
+    return Prompts.baseOf(text) .. "\n\n" .. Prompts.guide_rules
+end
+
 Prompts.reminder = REMINDER_MARK .. " use only the text supplied above; no hints about what comes next; "
     .. "say \"not yet clear\" rather than rely on memory of the book."
 

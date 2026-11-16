@@ -160,6 +160,37 @@ describe("Marginalia integration (marginalia_integration.lua)", function()
         assert.is_true(flushes >= 1)
     end)
 
+    describe("the reading guide offer", function()
+        local offers
+        local function withGuideScreen(plugin)
+            offers = 0
+            plugin._marginalia_guide_ui = { offer = function() offers = offers + 1 end }
+            return plugin
+        end
+
+        it("is made when a book opens at its start", function()
+            local plugin = withGuideScreen(newPlugin({ { title = "Chapter 1", page = 1 }, { title = "Chapter 2", page = 30 } }, 1))
+            plugin:marginaliaOnReaderReady()
+            assert.are.equal(1, offers)
+        end)
+
+        it("waits for the first-open question, and is made once it is answered", function()
+            local plugin = withGuideScreen(newPlugin({ { title = "A", page = 1 }, { title = "B", page = 14 } }, 20))
+            plugin:marginaliaOnReaderReady()
+            assert.is_not_nil(dialog)          -- "Have you read up to here?"
+            assert.are.equal(0, offers)        -- not on top of it
+            dialog.ok_callback()
+            assert.are.equal(1, offers)
+        end)
+
+        it("is not made for a book that already has a guide", function()
+            local plugin = withGuideScreen(newPlugin({ { title = "Chapter 1", page = 1 } }, 1))
+            saved.marginalia_guide = { v = 1, state = "never" }
+            plugin:marginaliaOnReaderReady()
+            assert.are.equal(0, offers)
+        end)
+    end)
+
     it("uses its own settings key, not xray's", function()
         local plugin = newPlugin({ { title = "Chapter 1", page = 1 } }, 1)
         plugin:marginaliaOnReaderReady()
@@ -349,10 +380,12 @@ describe("Marginalia menu hook in main.lua", function()
         assert.are.equal(items, plugin.current_xray_menu_table)
     end)
 
-    it("keeps upstream's entries after it", function()
+    it("puts 'Reading guide' second, and keeps upstream's entries after it", function()
         local items = menuPlugin(true):getSubMenuItems()
         assert.is_true(#items > 5)
-        assert.is_not_nil(items[2].text)
+        assert.are.equal("Reading guide", items[2].text)
+        assert.are.equal("function", type(items[2].callback))
+        assert.is_not_nil(items[3].text)
     end)
 
     it("still shows the entry (not set yet) when tracking is not running", function()

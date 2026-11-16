@@ -68,6 +68,38 @@ function SpoilerCheck.collect(data)
     return items
 end
 
+-- Every piece of text in a table, whatever it is called: for the reading guide, whose
+-- fields are not the X-Ray ones. Settings-like fields are skipped. Same item shape as
+-- collect(), so chunk / buildPrompt / buildRequest / parseVerdict all work on it.
+local SKIP_FIELDS = { genre = true, genre_confidence = true, knowledge = true, state = true, v = true }
+
+function SpoilerCheck.collectAll(data)
+    local items = {}
+    local function walk(node, path, depth)
+        if type(node) ~= "table" or depth > MAX_DEPTH then return end
+        local keys = {}
+        for k in pairs(node) do keys[#keys + 1] = k end
+        table.sort(keys, function(a, b)
+            if type(a) == type(b) then return a < b end
+            return type(a) == "number"
+        end)
+        local name = type(node.name) == "string" and node.name or nil
+        for _, k in ipairs(keys) do
+            local v = node[k]
+            if type(v) == "string" and not (type(k) == "string" and SKIP_FIELDS[k]) and worthChecking(v) then
+                local label = path
+                if name and k ~= "name" then label = label .. ' "' .. name:sub(1, 60) .. '"' end
+                items[#items + 1] = { text = v, label = label .. " " .. tostring(k), holder = node, key = k }
+            elseif type(v) == "table" then
+                walk(v, type(k) == "string" and k or path, depth + 1)
+            end
+        end
+    end
+    walk(data, "guide", 0)
+    for i, item in ipairs(items) do item.id = i end
+    return items
+end
+
 -- Split items into groups for separate requests. Each group is numbered from 1.
 function SpoilerCheck.chunk(items, size)
     size = size or SpoilerCheck.BATCH
