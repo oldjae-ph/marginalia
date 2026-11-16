@@ -237,6 +237,22 @@ describe("Marginalia integration: saved data and the boundary", function()
             assert.are.equal(0, #setAside())
         end)
 
+        it("keeps usable data but drops saved mention snippets from past the boundary", function()
+            local alice = { name = "Alice", last_mention_page = 55, mentions = {
+                { page = 3, snippet = "early" }, { page = 55, snippet = "late secret" } } }
+            CacheManager:new():saveCache(BOOK, story({
+                characters = { alice },
+                marginalia_boundary = { v = 1, chapter = 1, frac = 0.2 },
+            }))
+            local plugin = openMidBookAnsweringYes()
+            local loaded = plugin.characters[1]
+            assert.are.equal("Alice", loaded.name)
+            assert.are.equal(1, #loaded.mentions)
+            assert.are.equal(3, loaded.mentions[1].page)
+            assert.is_true(loaded.last_mention_page <= plugin:marginaliaLimitPage())
+            assert.are.equal(0, #setAside()) -- trimmed, not set aside
+        end)
+
         it("at the very start of a book, older data that reaches further is set aside", function()
             CacheManager:new():saveCache(BOOK, story({ last_fetch_page = 5 }))
             local plugin = newPlugin(1)

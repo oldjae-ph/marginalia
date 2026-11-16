@@ -264,6 +264,10 @@ function M:showMentionsForEntity(entity)
         max_page = spoiler_free and _getCurrentPage(self) or nil
     end
 
+    -- Marginalia: never past the confirmed boundary (also keeps last_mention_page
+    -- honest, so mentions between the boundary and the reader's page get scanned later)
+    if max_page and self.marginaliaClampPage then max_page = self:marginaliaClampPage(max_page) end
+
     local min_page = entity.last_mention_page
     if story and story.start_page then
         min_page = math.max(min_page or story.start_page, story.start_page)
@@ -318,6 +322,8 @@ function M:buildMentionsMenuItems(entity)
     local raw_mentions = entity.mentions or {}
     local is_spoiler_free = (self.ai_helper and self.ai_helper.settings and self.ai_helper.settings.spoiler_setting or "spoiler_free") == "spoiler_free"
     local cur_page = _getCurrentPage(self)
+    -- Marginalia: show nothing past the confirmed boundary, even if saved earlier
+    local boundary_page = self.marginaliaLimitPage and self:marginaliaLimitPage() or nil
 
     local story = nil
     if self.isAnthologyMode and self:isAnthologyMode() then
@@ -341,6 +347,7 @@ function M:buildMentionsMenuItems(entity)
     for _, m in ipairs(raw_mentions) do
         local p = tonumber(m.page)
         local page_ok = not is_spoiler_free or not cur_page or not p or p <= cur_page
+        if boundary_page and (not p or p > boundary_page) then page_ok = false end
         if page_ok and story and story.start_page and story.end_page and p then
             if p < story.start_page or p > story.end_page then
                 page_ok = false

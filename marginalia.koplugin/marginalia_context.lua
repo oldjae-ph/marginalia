@@ -77,4 +77,34 @@ function Context.isTainted(data, limit, limit_page)
     return fetched > limit_page
 end
 
+-- "Mentions" are snippets of book text saved inside each entity. Data can be
+-- within the boundary and still hold mentions from further on (made when the
+-- scan followed the reader's page). Drop those, and pull last_mention_page back
+-- so a later scan covers the gap once the boundary moves. Mentions with no page
+-- cannot be placed, so they go too. Returns how many were removed.
+function Context.pruneMentions(data, limit_page)
+    if type(data) ~= "table" or not isNumber(limit_page) then return 0 end
+    local removed = 0
+    for _, key in ipairs({ "characters", "locations", "historical_figures", "terms" }) do
+        local list = data[key]
+        if type(list) == "table" then
+            for _, entity in ipairs(list) do
+                if type(entity) == "table" then
+                    if type(entity.mentions) == "table" then
+                        local kept = {}
+                        for _, m in ipairs(entity.mentions) do
+                            local p = type(m) == "table" and tonumber(m.page) or nil
+                            if p and p <= limit_page then kept[#kept + 1] = m else removed = removed + 1 end
+                        end
+                        entity.mentions = kept
+                    end
+                    local last = tonumber(entity.last_mention_page)
+                    if last and last > limit_page then entity.last_mention_page = limit_page end
+                end
+            end
+        end
+    end
+    return removed
+end
+
 return Context

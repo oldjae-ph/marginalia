@@ -84,7 +84,12 @@ function M:marginaliaCheckCache(cm, data, book_path)
     if not session or not session:isSettled() then return false end
     local limit, limit_page = session:getLimit(), session:getLimitPage()
     if not limit_page then return false end -- cannot judge: hide it, leave the file alone
-    if not Context.isTainted(data, limit, limit_page) then return true end
+    if not Context.isTainted(data, limit, limit_page) then
+        -- usable, but trim saved mention snippets that reach past the boundary
+        local removed = Context.pruneMentions(data, limit_page)
+        if removed > 0 then self:log("Marginalia: dropped " .. removed .. " saved mention(s) past your boundary") end
+        return true
+    end
     self:log("Marginalia: saved X-Ray data reaches past your boundary; setting it aside")
     if cm and cm.quarantine then cm:quarantine(book_path) end
     return false

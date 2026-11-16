@@ -2032,6 +2032,11 @@ function ChapterAnalyzer:scanMentionsAsync(ui, entity, toc, min_page, max_page, 
         return { cancel = function() end } 
     end
 
+    -- Marginalia gate: mention snippets are book text, so never scan or keep
+    -- anything past the confirmed boundary, whatever page the caller asked for.
+    local gate_limit = self:getLimitPage()
+    if gate_limit then max_page = math.min(max_page or gate_limit, gate_limit) end
+
     local scan_toc = toc
     if not scan_toc or #scan_toc == 0 then
         local page_count = ui.document:getPageCount() and ui.document:getPageCount() or (ui.document.getTotalPages and ui.document:getTotalPages()) or 100
@@ -2083,7 +2088,8 @@ function ChapterAnalyzer:scanMentionsAsync(ui, entity, toc, min_page, max_page, 
                 
                 -- Filter out mentions that pass max_page or are before min_page (#150: strict boundary without overscan)
                 for _, m in ipairs(chapter_mentions) do
-                    if not (max_page and m.page and m.page > max_page) and not (min_page and m.page and m.page <= min_page) then
+                    local past_gate = gate_limit and (not m.page or m.page > gate_limit)
+                    if not past_gate and not (max_page and m.page and m.page > max_page) and not (min_page and m.page and m.page <= min_page) then
                         table.insert(mentions, m)
                     end
                 end
