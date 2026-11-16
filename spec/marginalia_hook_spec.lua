@@ -254,6 +254,64 @@ describe("Marginalia integration (marginalia_integration.lua)", function()
         assert.is_nil(analyzer.limit_provider)
     end)
 
+    describe("prefetching upcoming chapters", function()
+        local orig_network, queued
+
+        local function prefetchPlugin()
+            local plugin = newPlugin({ { title = "Chapter 1", page = 1 }, { title = "Chapter 2", page = 50 },
+                { title = "Chapter 3", page = 100 } }, 1)
+            queued = 0
+            plugin.ai_helper = { settings = { prefetch_horizon_chapters = 2 }, hasApiKey = function() return true end }
+            plugin.getCurrentDocPage = function() return 1 end
+            plugin._getFlatToc = function()
+                return { { title = "Chapter 1", page = 1 }, { title = "Chapter 2", page = 50 }, { title = "Chapter 3", page = 100 } }
+            end
+            plugin.queueSequentialChapterScan = function() queued = queued + 1 end
+            return plugin
+        end
+
+        before_each(function()
+            orig_network = package.loaded["ui/network/manager"]
+            package.loaded["ui/network/manager"] = {
+                isConnected = function() return true end,
+                hasDefaultRoute = function() return true end,
+                isOnline = function() return true end,
+            }
+        end)
+        after_each(function() package.loaded["ui/network/manager"] = orig_network end)
+
+        it("upstream queues upcoming chapters when a horizon is set (control)", function()
+            local plugin = prefetchPlugin()
+            plugin:checkPrefetchHorizon()
+            assert.are.equal(1, queued)
+        end)
+
+        it("is switched off once Marginalia is running", function()
+            local plugin = prefetchPlugin()
+            plugin:marginaliaOnReaderReady()
+            plugin:checkPrefetchHorizon()
+            assert.are.equal(0, queued)
+        end)
+
+        it("stays off when the settings picker or a network reconnect asks for it", function()
+            local plugin = prefetchPlugin()
+            plugin:marginaliaOnReaderReady()
+            for _ = 1, 3 do
+                if plugin.checkPrefetchHorizon then plugin:checkPrefetchHorizon() end
+            end
+            assert.are.equal(0, queued)
+        end)
+
+        it("only changes the plugin it is running for, not upstream's definition", function()
+            local plugin = prefetchPlugin()
+            plugin:marginaliaOnReaderReady()
+            assert.are_not.equal(XRayPlugin.checkPrefetchHorizon, plugin.checkPrefetchHorizon)
+            local other = prefetchPlugin() -- a plugin that never started Marginalia
+            other:checkPrefetchHorizon()
+            assert.are.equal(1, queued)
+        end)
+    end)
+
     it("keeps working if starting fails", function()
         local plugin = newPlugin({ { title = "A", page = 1 } }, 1)
         plugin.ui.document.getPageCount = function() error("document closed") end
@@ -329,6 +387,26 @@ describe("Marginalia menu hook in main.lua", function()
         assert.is_false(has(texts, "Spoiler Settings"))
     end)
 
+    it("upstream does offer Prefetch Horizon (control: without our hook it is there)", function()
+        local plugin = menuPlugin(true)
+        plugin.marginaliaAddMenuItems = false
+        assert.is_true(has(allTexts(plugin:getSubMenuItems()), "Prefetch Horizon (Offline Readers)"))
+    end)
+
+    it("hides the 'Prefetch Horizon' entry", function()
+        local texts = allTexts(menuPlugin(true):getSubMenuItems())
+        assert.is_false(has(texts, "Prefetch Horizon (Offline Readers)"))
+    end)
+
+    it("hides Prefetch Horizon in the plugin's own language too", function()
+        local plugin = menuPlugin(true)
+        plugin.loc = { t = function(_, key) if key == "menu_prefetch_horizon" then return "Vorabruf-Horizont" end end }
+        plugin.marginaliaAddMenuItems = false
+        assert.is_true(has(allTexts(plugin:getSubMenuItems()), "Vorabruf-Horizont")) -- control
+        plugin.marginaliaAddMenuItems = XRayPlugin.marginaliaAddMenuItems
+        assert.is_false(has(allTexts(plugin:getSubMenuItems()), "Vorabruf-Horizont"))
+    end)
+
     it("hides it in the plugin's own language too", function()
         local plugin = menuPlugin(true)
         plugin.loc = { t = function(_, key) if key == "spoiler_preference_title" then return "Spoiler-Einstellungen" end end }
@@ -342,8 +420,8 @@ describe("Marginalia menu hook in main.lua", function()
 
     it("leaves its neighbours alone", function()
         local texts = allTexts(menuPlugin(true):getSubMenuItems())
-        assert.is_true(has(texts, "Prefetch Horizon (Offline Readers)"))
         assert.is_true(has(texts, "Series Context"))
+        assert.is_true(has(texts, "Maintenance"))
         assert.is_true(has(texts, "Content & Fetch Settings"))
         assert.is_true(has(texts, "Settings"))
     end)

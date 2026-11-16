@@ -179,6 +179,7 @@ function M:marginaliaOnReaderReady()
     if self.marginalia then return end
     self:marginaliaInstallGate()
     self:marginaliaLockSpoilerMode()
+    self:marginaliaDisablePrefetch()
     local ok, err = pcall(function()
         local Session = require(plugin_path .. "marginalia_session")
         local Prompt = require(plugin_path .. "marginalia_prompt")
@@ -235,23 +236,41 @@ local function removeEntries(items, titles)
     end
 end
 
--- Upstream's "Spoiler Settings" only chooses between spoiler-free and "Full Book
--- Mode". Marginalia has no full-book mode (it is locked off), so the entry would
--- only mislead. Removed here, after upstream builds the menu, so upstream's own
--- code stays untouched. Matched by title, in English and in the plugin's language.
-function M:marginaliaHideFullBookSetting(items)
+-- Settings that Marginalia switches off, so showing them would only mislead:
+--   "Spoiler Settings"  chooses between spoiler-free and "Full Book Mode" (locked off)
+--   "Prefetch Horizon"  fetches X-Ray data for chapters AHEAD of the reader (disabled)
+-- Removed here, after upstream builds the menu, so upstream's own code stays
+-- untouched. Matched by title, in English and in the plugin's language.
+local HIDDEN_SETTINGS = {
+    { key = "spoiler_preference_title", english = "Spoiler Settings" },
+    { key = "menu_prefetch_horizon", english = "Prefetch Horizon (Offline Readers)" },
+}
+
+function M:marginaliaHideMisleadingSettings(items)
     local ok, err = pcall(function()
-        local titles = { ["Spoiler Settings"] = true }
-        local localized = self.loc and self.loc.t and self.loc:t("spoiler_preference_title")
-        if type(localized) == "string" and localized ~= "" then titles[localized] = true end
+        local titles = {}
+        for _, setting in ipairs(HIDDEN_SETTINGS) do
+            titles[setting.english] = true
+            local localized = self.loc and self.loc.t and self.loc:t(setting.key)
+            if type(localized) == "string" and localized ~= "" then titles[localized] = true end
+        end
         removeEntries(items, titles)
     end)
-    if not ok then self:log("Marginalia: could not hide the full-book setting: " .. tostring(err)) end
+    if not ok then self:log("Marginalia: could not hide settings: " .. tostring(err)) end
+end
+
+-- Prefetching "upcoming chapters" has no place in a spoiler-safe plugin. The text
+-- gate already blanks those chapters (so nothing is sent), but the scan still marks
+-- them as fetched, so X-Ray would skip them for good once the reader arrives. It
+-- also runs on every network reconnect, a path the page-turn hook does not cover.
+-- Shadow the method on this plugin object; upstream's definition is untouched.
+function M:marginaliaDisablePrefetch()
+    self.checkPrefetchHorizon = function() end
 end
 
 -- Add "Spoiler boundary" to the top of the X-Ray menu. Called from getSubMenuItems().
 function M:marginaliaAddMenuItems(items)
-    self:marginaliaHideFullBookSetting(items)
+    self:marginaliaHideMisleadingSettings(items)
     local ok, err = pcall(function()
         local MenuBuilder = require(plugin_path .. "marginalia_menu")
         local Prompt = require(plugin_path .. "marginalia_prompt")
