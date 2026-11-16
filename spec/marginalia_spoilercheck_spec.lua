@@ -123,6 +123,24 @@ describe("spoilercheck: the request", function()
         assert.is_true(captured.system:find("spoiler checker", 1, true) ~= nil)
     end)
 
+    it("gives a thinking model room to think, and asks for little thinking", function()
+        local h = helper("k")
+        h.isClaudeAdaptiveModel = function(model) return model:find("%-5%-") ~= nil end
+        SpoilerCheck.buildRequest(h, "p")
+        assert.is_true(captured.max_tokens >= 16000)  -- was 1024: the model ran out before answering
+        assert.are.equal("adaptive", captured.thinking.type)
+        assert.are.equal("low", captured.output_config.effort)
+    end)
+
+    it("leaves a model without thinking alone", function()
+        local h = helper("k")
+        h.settings.marginalia_spoiler_check_model = "claude-haiku-4-5"
+        h.isClaudeAdaptiveModel = function(model) return model:find("%-5%-") ~= nil end
+        SpoilerCheck.buildRequest(h, "p")
+        assert.are.equal(1024, captured.max_tokens)
+        assert.is_nil(captured.thinking)
+    end)
+
     it("can be pointed at another model, and another endpoint", function()
         local h = helper("k"); h.settings.marginalia_spoiler_check_model = "m-x"; h.providers.claude.endpoint = "https://proxy/v1/messages"
         local req = SpoilerCheck.buildRequest(h, "p")[1]

@@ -114,12 +114,23 @@ function SpoilerCheck.buildRequest(helper, prompt)
         return nil, "error_spoiler_check", "No JSON library for the spoiler check."
     end
     local model = (helper.settings and helper.settings.marginalia_spoiler_check_model) or SpoilerCheck.MODEL
-    local body = json.encode({
+    local payload = {
         model = model,
         max_tokens = 1024,
         system = Template.system,
         messages = { { role = "user", content = prompt } },
-    })
+    }
+    -- Claude 5.x models think before they answer, and thinking counts against
+    -- max_tokens: with a small limit the model can run out before writing a single
+    -- word ("No text in AI response", seen live). Give those models room, and ask
+    -- for the least thinking, since the answer is only a list of numbers.
+    local adaptive = type(helper.isClaudeAdaptiveModel) == "function" and helper.isClaudeAdaptiveModel(model)
+    if adaptive then
+        payload.max_tokens = 16000
+        payload.thinking = { type = "adaptive" }
+        payload.output_config = { effort = "low" }
+    end
+    local body = json.encode(payload)
     return {
         {
             url = config.endpoint or "https://api.anthropic.com/v1/messages",
