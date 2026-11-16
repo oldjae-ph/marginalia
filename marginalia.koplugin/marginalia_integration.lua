@@ -6,6 +6,7 @@
 
 local plugin_path = ((...) or ""):match("(.-)[^%.]+$") or ""
 local Context = require(plugin_path .. "marginalia_context")
+local SpoilerCheck = require(plugin_path .. "marginalia_spoilercheck")
 
 local M = {}
 
@@ -144,6 +145,8 @@ end
 -- would be stamped with the new boundary), and reload through the guard.
 function M:marginaliaOnLowered()
     self:marginaliaTrimSeriesEntry()
+    -- text waiting for its spoiler check was written for the old, further boundary
+    for key in pairs(self._marginalia_check_state or {}) do self._marginalia_check_state[key] = nil end
     if self.cancelActiveAIRequest then
         pcall(self.cancelActiveAIRequest, self, "Boundary moved back")
     end
@@ -232,6 +235,95 @@ function M:marginaliaLockSpoilerMode()
     force(helper)
 end
 
+-- Second-pass spoiler check (marginalia_spoilercheck.lua). Every fetch polls
+-- ai_helper:checkAsyncResult() until its result is ready, so that is where the
+-- check goes: when the AI's text arrives it is NOT returned; a small model reads it
+-- first (the caller just sees "not ready yet" and keeps polling), anything flagged
+-- is replaced, and only then does the caller get the data. If the check cannot run
+-- the caller gets a failure and the text is never shown (fails closed).
+local function failCheck(pending, result_file, reason)
+    pending[result_file] = nil
+    return false, "error_spoiler_check", reason
+end
+
+function M:marginaliaSpoilerPosition()
+    local session = self.marginalia
+    if not (session and session:isSettled()) then return nil end
+    local d = session:describe()
+    if not d then return nil end
+    local parts = {}
+    if d.title then
+        parts[#parts + 1] = string.format('the point %d%% of the way through the chapter "%s"', d.percent or 0, d.title)
+    else
+        parts[#parts + 1] = "the very start of the book (nothing yet)"
+    end
+    local doc = self.ui and self.ui.document
+    local page, total = session:getLimitPage(), doc and doc.getPageCount and doc:getPageCount()
+    if page and total and total > 0 then
+        parts[#parts + 1] = string.format("about %d%% of the whole book", math.floor(page / total * 100))
+    end
+    return table.concat(parts, ", ")
+end
+
+function M:marginaliaStartCheckBatch(helper, state, result_file)
+    local pending = self._marginalia_check_state
+    local position = self:marginaliaSpoilerPosition()
+    if not position then return failCheck(pending, result_file, "Your spoiler boundary is not set, so the new text cannot be checked.") end
+    local doc = self.ui and self.ui.document
+    local props = {}
+    if doc and doc.getProps then pcall(function() props = doc:getProps() or {} end) end
+    local prompt = SpoilerCheck.buildPrompt(state.batches[state.cur], {
+        title = props.title, author = props.authors or props.author, position = position,
+    })
+    local requests, code, msg = SpoilerCheck.buildRequest(helper, prompt)
+    if not requests then return failCheck(pending, result_file, msg or code) end
+    local check_file = result_file .. ".check"
+    local pid, err_code, err_msg = helper:makeRequestAsync(requests, check_file)
+    if not pid then return failCheck(pending, result_file, err_msg or err_code or "could not start the spoiler check") end
+    state.check_file, state.check_pid = check_file, pid
+    return nil -- not ready: the caller keeps polling
+end
+
+function M:marginaliaInstallSpoilerCheck()
+    local helper = self.ai_helper
+    if type(helper) ~= "table" or helper._marginalia_checked then return end
+    local orig = helper.checkAsyncResult
+    if type(orig) ~= "function" then return end
+    helper._marginalia_checked = true
+    local plugin = self
+    local pending = {}
+    self._marginalia_check_state = pending
+
+    helper.checkAsyncResult = function(h, result_file, expected_pid, ...)
+        local state = pending[result_file]
+        if state then
+            -- the text has arrived; waiting for the checker's verdict on it
+            local verdict, code, msg = orig(h, state.check_file, state.check_pid)
+            if verdict == nil then return nil end
+            if verdict == false then return failCheck(pending, result_file, msg or code) end
+            local batch = state.batches[state.cur]
+            local flagged = SpoilerCheck.parseVerdict(verdict, #batch)
+            if not flagged then return failCheck(pending, result_file, "The spoiler check gave an answer that could not be read.") end
+            local replaced = SpoilerCheck.apply(batch, flagged)
+            if replaced > 0 then plugin:log("Marginalia: spoiler check withheld " .. replaced .. " statement(s)") end
+            state.cur = state.cur + 1
+            if state.cur > #state.batches then
+                pending[result_file] = nil
+                return state.data
+            end
+            return plugin:marginaliaStartCheckBatch(h, state, result_file)
+        end
+
+        local data, code, msg = orig(h, result_file, expected_pid, ...)
+        if type(data) ~= "table" then return data, code, msg end
+        local items = SpoilerCheck.collect(data)
+        if #items == 0 then return data end -- nothing story-related to check
+        state = { data = data, batches = SpoilerCheck.chunk(items), cur = 1 }
+        pending[result_file] = state
+        return plugin:marginaliaStartCheckBatch(h, state, result_file)
+    end
+end
+
 -- The last page the reader may see or send (0 = nothing).
 function M:marginaliaLimitPage()
     return self._marginalia_gate and self._marginalia_gate() or nil
@@ -252,6 +344,7 @@ function M:marginaliaOnReaderReady()
     if self.marginalia then return end
     self:marginaliaInstallGate()
     self:marginaliaLockSpoilerMode()
+    self:marginaliaInstallSpoilerCheck()
     self:marginaliaDisablePrefetch()
     self:marginaliaDisableUpdates()
     local ok, err = pcall(function()
