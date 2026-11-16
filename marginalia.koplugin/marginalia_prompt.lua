@@ -24,13 +24,41 @@ local function once(fn)
 end
 
 -- "You started a new chapter. Have you finished <previous>?"
-function Prompt.askFinished(finished_title, on_yes, on_not_yet)
+-- With on_yes_debrief the question has three answers (as in the spec's screen):
+-- [Mark done + debrief] [Mark done] [Not yet]. Dismissing it counts as "Not yet".
+function Prompt.askFinished(finished_title, on_yes, on_not_yet, on_yes_debrief)
     local yes, no = once(on_yes), once(on_not_yet)
     local text
     if finished_title and finished_title ~= "" then
         text = string.format('You have started a new chapter.\n\nHave you finished "%s"?', finished_title)
     else
         text = "You have started a new chapter.\n\nHave you finished the previous chapter?"
+    end
+    if on_yes_debrief then
+        local yes_debrief = once(on_yes_debrief)
+        UIManager:nextTick(function()
+            local ButtonDialog = require("ui/widget/buttondialog")
+            local dialog
+            local function pick(fn)
+                return function()
+                    UIManager:close(dialog)
+                    fn()
+                end
+            end
+            dialog = ButtonDialog:new{
+                title = text .. "\n\nMarking it done moves your spoiler boundary forward. You can move it back any time.",
+                tap_close_callback = no,
+                buttons = {
+                    { { text = "Mark done + debrief", callback = pick(yes_debrief) } },
+                    {
+                        { text = "Mark done", callback = pick(yes) },
+                        { text = "Not yet", callback = pick(no) },
+                    },
+                },
+            }
+            UIManager:show(dialog)
+        end)
+        return
     end
     -- nextTick: let the page finish drawing before the dialog appears.
     UIManager:nextTick(function()

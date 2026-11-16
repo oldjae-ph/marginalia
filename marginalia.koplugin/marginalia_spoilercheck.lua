@@ -71,7 +71,12 @@ end
 -- Every piece of text in a table, whatever it is called: for the reading guide, whose
 -- fields are not the X-Ray ones. Settings-like fields are skipped. Same item shape as
 -- collect(), so chunk / buildPrompt / buildRequest / parseVerdict all work on it.
-local SKIP_FIELDS = { genre = true, genre_confidence = true, knowledge = true, state = true, v = true }
+-- (`quote` is copied from the supplied chapter, already inside the boundary; `tag` and
+-- `depth` are labels, not statements.)
+local SKIP_FIELDS = {
+    genre = true, genre_confidence = true, knowledge = true, state = true, v = true,
+    depth = true, tag = true, quote = true,
+}
 
 function SpoilerCheck.collectAll(data)
     local items = {}

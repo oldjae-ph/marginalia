@@ -231,9 +231,91 @@ describe("Marginalia integration (marginalia_integration.lua)", function()
         assert.are.same(before, plugin2.marginalia:getLimit())
     end)
 
+    describe("the chapter-end question with a debrief on offer", function()
+        local bdialog, debriefs, orig_buttondialog
+        local function chapterEnd()
+            local plugin = newPlugin({ { title = "One", page = 1 }, { title = "Two", page = 11 } }, 1)
+            debriefs = {}
+            plugin.marginaliaDebriefStart = function(_, index) debriefs[#debriefs + 1] = index end
+            plugin._marginalia_guide_ui = { offer = function() end } -- keep the guide's own dialog out of it
+            plugin:marginaliaOnReaderReady()
+            for p = 1, 10 do plugin:marginaliaOnPageUpdate(p) end
+            plugin:marginaliaOnPageUpdate(11)
+            return plugin
+        end
+        local function press(label)
+            for _, row in ipairs(bdialog.buttons) do
+                for _, b in ipairs(row) do if b.text == label then return b.callback() end end
+            end
+            error("no button: " .. label)
+        end
+
+        before_each(function()
+            bdialog = nil
+            orig_buttondialog = package.loaded["ui/widget/buttondialog"]
+            package.loaded["ui/widget/buttondialog"] = { new = function(_, opts) bdialog = opts return opts end }
+        end)
+        after_each(function() package.loaded["ui/widget/buttondialog"] = orig_buttondialog end)
+
+        it("offers three answers, and the question names the chapter", function()
+            chapterEnd()
+            assert.is_nil(dialog) -- not the plain yes/no box
+            assert.is_not_nil(bdialog)
+            assert.is_true(bdialog.title:find('"One"', 1, true) ~= nil)
+            local labels = {}
+            for _, row in ipairs(bdialog.buttons) do for _, b in ipairs(row) do labels[#labels + 1] = b.text end end
+            assert.are.same({ "Mark done + debrief", "Mark done", "Not yet" }, labels)
+        end)
+
+        it("'Mark done + debrief' moves the boundary, then debriefs the chapter just FINISHED", function()
+            local plugin = chapterEnd()
+            assert.are.equal(1, plugin.marginalia:getLimit().chapter)
+            press("Mark done + debrief")
+            assert.are.equal(2, plugin.marginalia:getLimit().chapter)
+            assert.are.same({ 1 }, debriefs) -- chapter One, not the chapter just started
+        end)
+
+        it("'Mark done + debrief' starts no debrief if the boundary did not actually move", function()
+            local plugin = chapterEnd()
+            -- the reader moved the boundary some other way while the question was open
+            plugin.marginalia.boundary.pending_chapter = nil
+            press("Mark done + debrief")
+            assert.are.equal(1, plugin.marginalia:getLimit().chapter)
+            assert.are.same({}, debriefs)
+        end)
+
+        it("'Mark done' moves the boundary and starts no debrief", function()
+            local plugin = chapterEnd()
+            press("Mark done")
+            assert.are.equal(2, plugin.marginalia:getLimit().chapter)
+            assert.are.same({}, debriefs)
+        end)
+
+        it("'Not yet' and dismissing it move nothing", function()
+            local plugin = chapterEnd()
+            press("Not yet")
+            assert.are.equal(1, plugin.marginalia:getLimit().chapter)
+            local again = chapterEnd()
+            bdialog.tap_close_callback()
+            assert.are.equal(1, again.marginalia:getLimit().chapter)
+            assert.are.same({}, debriefs)
+        end)
+
+        it("is the plain two-answer question when debriefs are not available", function()
+            local plugin = newPlugin({ { title = "One", page = 1 }, { title = "Two", page = 11 } }, 1)
+            plugin._marginalia_guide_ui = { offer = function() end }
+            plugin:marginaliaOnReaderReady()
+            plugin.marginalia.deps.on_debrief = nil
+            for p = 1, 11 do plugin:marginaliaOnPageUpdate(p) end
+            assert.is_not_nil(dialog)
+            assert.is_nil(bdialog)
+        end)
+    end)
+
     it("asks 'Have you finished ...?' at a chapter change and moves only on yes", function()
         local plugin = newPlugin({ { title = "One", page = 1 }, { title = "Two", page = 11 } }, 1)
         plugin:marginaliaOnReaderReady()
+        plugin.marginalia.deps.on_debrief = nil -- the two-answer form (the three-answer form is tested above)
         for p = 1, 10 do plugin:marginaliaOnPageUpdate(p) end
         assert.is_nil(dialog)
         plugin:marginaliaOnPageUpdate(11)

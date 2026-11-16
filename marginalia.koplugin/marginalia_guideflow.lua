@@ -142,6 +142,11 @@ local function tempFile(helper, tag)
     return (helper.path or ".") .. "/tmp_" .. tag .. "_" .. tostring(os.time()) .. ".json"
 end
 
+-- Shared with the chapter debrief (marginalia_debriefflow.lua), which asks the AI and
+-- checks the answer in the same way.
+function GuideFlow:marginaliaWaitFor(file, pid, on_result) return waitFor(self, file, pid, on_result) end
+function GuideFlow:marginaliaTempFile(tag) return tempFile(self.ai_helper, tag) end
+
 function GuideFlow:marginaliaGuideStart()
     if self._marginalia_guide_busy then return end
     local helper, ui = self.ai_helper, self:marginaliaGuideUI()
@@ -201,7 +206,8 @@ local GUIDE_POSITION = "the very beginning of the book. The reader has read noth
     .. "A statement is fine if it is about the author, the period, the style or general background, or about people met in the first chapter."
 
 -- done("clean") | done("flagged", count) | done("unchecked", reason)
-function GuideFlow:marginaliaGuideCheck(guide, done)
+-- `position` says how far the reader has got (default: the very start, for the guide).
+function GuideFlow:marginaliaGuideCheck(guide, done, position)
     local helper = self.ai_helper
     local items = SpoilerCheck.collectAll(guide)
     if #items == 0 then return done("clean") end
@@ -215,7 +221,7 @@ function GuideFlow:marginaliaGuideCheck(guide, done)
         end
         local batch = batches[index]
         local prompt = SpoilerCheck.buildPrompt(batch, {
-            title = info.title, author = info.author, position = GUIDE_POSITION,
+            title = info.title, author = info.author, position = position or GUIDE_POSITION,
         })
         local requests, code, msg = SpoilerCheck.buildRequest(helper, prompt)
         if not requests then return done("unchecked", msg or code) end

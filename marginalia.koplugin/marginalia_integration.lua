@@ -12,6 +12,8 @@ local M = {}
 
 -- The reading guide's methods (marginalia_guideflow.lua) live on the plugin too.
 for name, fn in pairs(require(plugin_path .. "marginalia_guideflow")) do M[name] = fn end
+-- ... and the chapter debrief's (marginalia_debriefflow.lua)
+for name, fn in pairs(require(plugin_path .. "marginalia_debriefflow")) do M[name] = fn end
 
 -- Flat TOC as {page, title} sorted by page, entries without a page dropped.
 -- Rebuilt whenever the page count changes (font size or margin changes repaginate).
@@ -386,6 +388,7 @@ function M:marginaliaOnReaderReady()
             log = function(msg) self:log(msg) end,
             on_settled = function() self:marginaliaOnSettled() end,
             on_lowered = function() self:marginaliaOnLowered() end,
+            on_debrief = function(index) self:marginaliaDebriefAfterFinish(index) end,
         })
         self.marginalia = session
         session:start(self:getCurrentPage())
@@ -475,6 +478,7 @@ function M:marginaliaAddMenuItems(items)
         local guide_item = self:marginaliaGuideMenuItem()
         guide_item.text = "Reading guide"
         table.insert(items, 2, guide_item)
+        for i, item in ipairs(self:marginaliaDebriefMenuItems()) do table.insert(items, 2 + i, item) end
     end)
     if not ok then self:log("Marginalia: could not add the boundary menu: " .. tostring(err)) end
 end

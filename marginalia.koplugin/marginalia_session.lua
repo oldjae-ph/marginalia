@@ -14,6 +14,7 @@
 --   log         = function(msg)                    -- optional, never pass book text
 --   on_settled  = function()   -- optional: the boundary is now known (first-open question answered)
 --   on_lowered  = function()   -- optional: the READER moved the boundary back
+--   on_debrief  = function(chapter_index)  -- optional: the reader answered "Mark done + debrief"
 -- }
 
 local plugin_path = ((...) or ""):match("(.-)[^%.]+$") or ""
@@ -181,20 +182,40 @@ function Session:onPageUpdate(page)
     end
 end
 
+-- The real chapter the reader is being asked about (see _finishedTitle), by index.
+function Session:_finishedIndex()
+    local confirmed = self.boundary:getConfirmedChapter()
+    for i = confirmed, 1, -1 do
+        if not self:_isSkippableIndex(i) then return i end
+    end
+    return nil
+end
+
 function Session:_askFinished(chapter)
     self.prompt_open = true
+    -- Taken BEFORE confirming: confirming moves the boundary into the new chapter.
+    local finished_index = self:_finishedIndex()
+    local function confirm()
+        self.prompt_open = false
+        if self.boundary:confirm(chapter) then
+            self:_persist(true)
+            self:_log("reader confirmed chapter " .. tostring(chapter))
+            return true
+        end
+        return false
+    end
+    local on_debrief = self.deps.on_debrief
     self.deps.prompter.askFinished(self:_finishedTitle(),
-        function() -- yes
-            self.prompt_open = false
-            if self.boundary:confirm(chapter) then
-                self:_persist(true)
-                self:_log("reader confirmed chapter " .. tostring(chapter))
-            end
-        end,
+        function() confirm() end, -- yes
         function() -- not yet
             self.prompt_open = false
             self.declined = chapter
-        end)
+        end,
+        -- "mark done + debrief": only offered when the plugin can debrief
+        on_debrief and finished_index and function()
+            -- the debrief starts only if the boundary really moved: never ahead of it
+            if confirm() then on_debrief(finished_index) end
+        end or nil)
 end
 
 -- Reader-initiated changes. Never call these from automatic code paths.
