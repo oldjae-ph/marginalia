@@ -398,6 +398,20 @@ describe("Marginalia menu hook in main.lua", function()
         assert.is_false(has(texts, "Prefetch Horizon (Offline Readers)"))
     end)
 
+    it("upstream does offer the updater entries (control: without our hook they are there)", function()
+        local plugin = menuPlugin(true)
+        plugin.marginaliaAddMenuItems = false
+        local texts = allTexts(plugin:getSubMenuItems())
+        assert.is_true(has(texts, "Check for Updates"))
+        assert.is_true(has(texts, "Beta Channel Settings"))
+    end)
+
+    it("hides 'Check for Updates' and 'Beta Channel Settings'", function()
+        local texts = allTexts(menuPlugin(true):getSubMenuItems())
+        assert.is_false(has(texts, "Check for Updates"))
+        assert.is_false(has(texts, "Beta Channel Settings"))
+    end)
+
     it("hides Prefetch Horizon in the plugin's own language too", function()
         local plugin = menuPlugin(true)
         plugin.loc = { t = function(_, key) if key == "menu_prefetch_horizon" then return "Vorabruf-Horizont" end end }

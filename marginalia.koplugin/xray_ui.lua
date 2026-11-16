@@ -4139,26 +4139,30 @@ function M:showAbout()
 
     local ButtonDialog = require("ui/widget/buttondialog")
     local about_dlg
+    local about_buttons = {
+        {
+            text = self.loc:t("close") or "Close",
+            callback = function()
+                UIManager:close(about_dlg)
+            end,
+        },
+    }
+    -- Marginalia: the updater is off (xray_updater.lua), so no button for it
+    local updater = require(plugin_path .. "xray_updater")
+    if updater.enabled then
+        table.insert(about_buttons, {
+            text = self.loc:t("updater_check") or "Check for Updates",
+            is_enter_default = true,
+            callback = function()
+                UIManager:close(about_dlg)
+                updater.checkForUpdates(self.loc, self.ai_helper.settings.beta_channel_enabled)
+            end,
+        })
+    end
     about_dlg = ButtonDialog:new{
         modal = true,
         title = body,
-        buttons = {{
-            {
-                text = self.loc:t("close") or "Close",
-                callback = function()
-                    UIManager:close(about_dlg)
-                end,
-            },
-            {
-                text = self.loc:t("updater_check") or "Check for Updates",
-                is_enter_default = true,
-                callback = function()
-                    UIManager:close(about_dlg)
-                    local updater = require(plugin_path .. "xray_updater")
-                    updater.checkForUpdates(self.loc, self.ai_helper.settings.beta_channel_enabled)
-                end,
-            },
-        }},
+        buttons = { about_buttons },
     }
     UIManager:show(about_dlg)
 end

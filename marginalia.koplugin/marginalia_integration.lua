@@ -253,6 +253,7 @@ function M:marginaliaOnReaderReady()
     self:marginaliaInstallGate()
     self:marginaliaLockSpoilerMode()
     self:marginaliaDisablePrefetch()
+    self:marginaliaDisableUpdates()
     local ok, err = pcall(function()
         local Session = require(plugin_path .. "marginalia_session")
         local Prompt = require(plugin_path .. "marginalia_prompt")
@@ -312,11 +313,14 @@ end
 -- Settings that Marginalia switches off, so showing them would only mislead:
 --   "Spoiler Settings"  chooses between spoiler-free and "Full Book Mode" (locked off)
 --   "Prefetch Horizon"  fetches X-Ray data for chapters AHEAD of the reader (disabled)
+--   "Beta Channel Settings", "Check for Updates"  the self-updater is off (xray_updater.lua)
 -- Removed here, after upstream builds the menu, so upstream's own code stays
 -- untouched. Matched by title, in English and in the plugin's language.
 local HIDDEN_SETTINGS = {
     { key = "spoiler_preference_title", english = "Spoiler Settings" },
     { key = "menu_prefetch_horizon", english = "Prefetch Horizon (Offline Readers)" },
+    { key = "menu_beta_channel", english = "Beta Channel Settings" },
+    { key = "updater_check", english = "Check for Updates" },
 }
 
 function M:marginaliaHideMisleadingSettings(items)
@@ -339,6 +343,13 @@ end
 -- Shadow the method on this plugin object; upstream's definition is untouched.
 function M:marginaliaDisablePrefetch()
     self.checkPrefetchHorizon = function() end
+end
+
+-- The self-updater downloads upstream's release and unzips it over this plugin, so it
+-- is off (xray_updater.lua refuses to run). Stop the weekly background check from
+-- even starting; its menu entries are hidden above and the About button is not drawn.
+function M:marginaliaDisableUpdates()
+    self.checkWeeklyUpdate = function() end
 end
 
 -- Add "Spoiler boundary" to the top of the X-Ray menu. Called from getSubMenuItems().

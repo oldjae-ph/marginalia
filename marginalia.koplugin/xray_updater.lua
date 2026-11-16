@@ -23,6 +23,12 @@ local CACHE_TTL    = 3600  -- 1 hour
 
 local M = {}
 
+-- Marginalia: self-updating is OFF. The settings above still name upstream's
+-- repository, and an update would download and unzip over this plugin's folder, so
+-- nothing here may reach the network or the disk while this is false. Every public
+-- entry point, and the two network functions and the unzip below, check it.
+M.enabled = false
+
 -- Store a reference to the localization object
 M.loc = nil
 
@@ -179,6 +185,7 @@ end
 -- ---------------------------------------------------------------------------
 
 local function _httpGet(url)
+    if not M.enabled then return nil, "updates are disabled" end
     local ok_su, socketutil = pcall(require, "socketutil")
     local http   = require("socket/http")
     local ltn12  = require("ltn12")
@@ -224,6 +231,7 @@ local function _httpGet(url)
 end
 
 local function _httpGetToFile(url, dest_path)
+    if not M.enabled then return nil, "updates are disabled" end
     local ok_su, socketutil = pcall(require, "socketutil")
     local http   = require("socket/http")
     local ltn12  = require("ltn12")
@@ -369,6 +377,7 @@ end
 -- ---------------------------------------------------------------------------
 
 local function _unzip(zip_path, dest_dir)
+    if not M.enabled then return nil, "updates are disabled" end
     local cmd = string.format("unzip -o -q %q -d %q", zip_path, dest_dir)
     local ret = os.execute(cmd)
     if ret ~= 0 and ret ~= true then
@@ -798,6 +807,7 @@ local function _doFetch(use_beta)
 end
 
 function M._doCheckForUpdates(current, use_beta)
+    if not M.enabled then return end
     local checking_msg = _toast(t("updater_checking"), 15)
     local ok_tr, Trapper = pcall(require, "ui/trapper")
 
@@ -837,6 +847,7 @@ end
 
 -- localization param allows the caller to pass the X-Ray loc module
 function M.checkForUpdates(loc, use_beta)
+    if not M.enabled then return end
     M.loc = loc
     local current = _currentVersion()
     local ok_nm, NetworkMgr = pcall(require, "ui/network/manager")
@@ -850,6 +861,7 @@ function M.checkForUpdates(loc, use_beta)
 end
 
 function M.checkSilentForUpdates(loc, use_beta, opts)
+    if not M.enabled then return end
     M.loc = loc
     opts = opts or {}
     local on_done = opts.on_done

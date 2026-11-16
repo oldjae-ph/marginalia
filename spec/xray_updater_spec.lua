@@ -13,11 +13,19 @@ describe("xray_updater", function()
     end)
 
     before_each(function()
+        -- Marginalia ships the updater switched off; these tests are about how it
+        -- behaves, so each one turns it on and it is switched off again afterwards
+        -- (marginalia_updater_spec.lua proves the off state).
+        updater.enabled = true
         _G.ui_tracker.shown = {}
         _G.ui_tracker.last_shown = nil
         _G.ui_tracker.closed = {}
         Device.screen.getHeight = function() return 800 end
         Device.screen.getWidth = function() return 600 end
+    end)
+
+    after_each(function()
+        updater.enabled = false
     end)
 
     describe("_cleanReleaseNotes", function()
