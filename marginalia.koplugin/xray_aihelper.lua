@@ -30,6 +30,8 @@ local REAP_MAX_ATTEMPTS = 10
 
 local logger = require("logger")
 local plugin_path = ((...) or ""):match("(.-)[^%.]+$") or ""
+local ok_mp, MarginaliaPrompts = pcall(require, plugin_path .. "marginalia_prompts")
+if not ok_mp then MarginaliaPrompts = nil end
 local XRayLogger = require(plugin_path .. "xray_logger")
 local Trapper = require("ui/trapper")
 local utils = require(plugin_path .. "xray_utils")
@@ -1912,6 +1914,11 @@ function AIHelper:loadLanguage()
         local ok_loc, loc_prompts = pcall(dofile, loc_file)
         if ok_loc and type(loc_prompts) == "table" then for k, v in pairs(loc_prompts) do self.prompts[k] = v end end
     end
+    -- Marginalia: every provider reads its system instruction from here, so the
+    -- spoiler rules added to it reach every request.
+    if MarginaliaPrompts then
+        self.prompts.system_instruction = MarginaliaPrompts.forSystem(self.prompts.system_instruction)
+    end
 end
 
 function AIHelper:isAnthropic(provider, endpoint)
@@ -2210,6 +2217,7 @@ function AIHelper:createPrompt(title, author, context, section_name, targeted_wo
     if #final_prompt ~= before_len then
         self:log(string.format("AIHelper: sanitize_utf8 stripped %d invalid byte(s) from prompt", before_len - #final_prompt))
     end
+    if MarginaliaPrompts then final_prompt = MarginaliaPrompts.forPrompt(final_prompt) end
     return final_prompt
 end
 
@@ -2937,7 +2945,8 @@ function AIHelper:buildChapterDeltaPrompt(title, author, chapter_title, manifest
         chapter_title or "Current Chapter",
         chapter_text or ""
     )
-    return self:sanitize_utf8(prompt)
+    prompt = self:sanitize_utf8(prompt)
+    return MarginaliaPrompts and MarginaliaPrompts.forPrompt(prompt) or prompt
 end
 
 function AIHelper:buildBatchChapterDeltaPrompt(title, author, batch_chapters, manifest_text)
@@ -2972,7 +2981,8 @@ function AIHelper:buildBatchChapterDeltaPrompt(title, author, batch_chapters, ma
         manifest_text or "None",
         combined_texts
     )
-    return self:sanitize_utf8(prompt)
+    prompt = self:sanitize_utf8(prompt)
+    return MarginaliaPrompts and MarginaliaPrompts.forPrompt(prompt) or prompt
 end
 
 -- Import API keys from a plain text file (e.g. xray_key.txt at storage root or settings dir)
